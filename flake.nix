@@ -11,6 +11,6 @@
         modules = [
           ./hosts/survival-kit
         ];
-    }
+    };
   };
 }
