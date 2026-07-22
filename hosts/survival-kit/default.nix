@@ -1,7 +1,7 @@
 {config, pkgs, lib,...}:
 {
 
-  imports = [ ../../modules/base ];  # pull in the base system
+  imports = [ ../../modules/base ./disko.nix ];  # pull in the base system
 
   networking.hostName = "survival-kit";
 
@@ -15,4 +15,7 @@
 
   # this must match version from root flake
   system.stateVersion = "26.05";
+
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
 }
