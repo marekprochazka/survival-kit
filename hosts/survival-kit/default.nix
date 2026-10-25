@@ -33,6 +33,13 @@
   # compatible with their existing on-disk data. Never bump it on upgrades.
   system.stateVersion = "26.05";
 
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  # GRUB boots legacy BIOS (via the EF02 partition) and UEFI; disko sets
+  # boot.loader.grub.devices to the target disk. The removable EFI path
+  # (EFI/BOOT/BOOTX64.EFI) needs no firmware boot entry — robust for moved
+  # disks and VirtualBox.
+  boot.loader.grub = {
+    enable = true;
+    efiSupport = true;
+    efiInstallAsRemovable = true;
+  };
 }

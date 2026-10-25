@@ -30,6 +30,10 @@ in
     content = {
       type = "gpt";
       partitions = {
+        bios = {
+          size = "1M";
+          type = "EF02"; # GRUB's legacy-BIOS core lives here (no filesystem)
+        };
         ESP = {
           size = "512M";
           type = "EF00";
