@@ -24,4 +24,10 @@ assert lib.assertMsg (lib.elem "display-manager.service" svc.before)
 assert lib.assertMsg (
   svc.unitConfig.ConditionPathExists == "!/var/lib/survival-kit/firstboot-done"
 ) "first boot must run only until its marker exists";
+assert lib.assertMsg (
+  lib.elem "quiet" cfg.boot.kernelParams && lib.elem "systemd.show_status=error" cfg.boot.kernelParams
+) "boot must be quiet so status messages don't print into the first-boot prompt";
+assert lib.assertMsg (
+  cfg.system.activationScripts ? survival-kit-display-name
+) "the display name must be re-applied after NixOS rewrites /etc/passwd";
 pkgs.runCommand "eval-firstboot" { } "touch $out"

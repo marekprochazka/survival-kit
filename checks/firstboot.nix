@@ -53,5 +53,7 @@ pkgs.testers.runNixOSTest {
         assert "ConditionResult=no" in machine.succeed(
             "systemctl show survival-kit-firstboot.service -p ConditionResult"
         )
+        # NixOS rewrites /etc/passwd at every boot — the display name must survive
+        assert "Test Person" in machine.succeed("getent passwd deck"), "display name lost on reboot"
   '';
 }

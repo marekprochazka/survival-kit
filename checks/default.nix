@@ -17,6 +17,7 @@ let
     eval-install = import ./eval-install.nix args;
     eval-firstboot = import ./eval-firstboot.nix args;
     eval-iso = import ./eval-iso.nix args;
+    firstboot-script = import ./firstboot-script.nix args;
   };
 in
 evalChecks

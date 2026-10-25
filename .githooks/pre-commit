@@ -3,7 +3,15 @@
 # Enable once per clone:  git config core.hooksPath .githooks
 # Emergency bypass:       git commit --no-verify
 set -euo pipefail
+# hooks may run with a minimal PATH (e.g. from editors or tool shells):
+# look for nix in the usual places (distro package, NixOS, multi-user install)
+PATH="$PATH:/usr/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin"
 cd "$(git rev-parse --show-toplevel)"
+
+command -v nix >/dev/null || {
+  echo "✗ pre-commit: 'nix' not found — install Nix or commit with --no-verify." >&2
+  exit 1
+}
 
 echo "pre-commit: static checks (nixfmt, statix, deadnix)…"
 if ! nix build .#checks.x86_64-linux.lint --no-link --print-build-logs; then

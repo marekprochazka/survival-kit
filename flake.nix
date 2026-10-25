@@ -52,7 +52,7 @@
           flakeSrc = self;
           inherit (disko.packages.${system}) disko;
         };
-        # the installer ISO (big: ~4–5 GB) — build with utils/build-iso
+        # the installer ISO (big: ~3 GB) — build with utils/build-iso
         iso = self.nixosConfigurations.installer.config.system.build.isoImage;
       };
 

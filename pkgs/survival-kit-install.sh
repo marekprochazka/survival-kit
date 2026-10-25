@@ -55,7 +55,7 @@ announce 1 "Choose the target disk"
 candidates=()
 while read -r name type; do
   [[ $type == disk ]] || continue
-  [[ $name == loop* || $name == sr* || $name == zram* ]] && continue
+  [[ $name == loop* || $name == sr* || $name == zram* || $name == fd* || $name == ram* ]] && continue
   # skip disks with anything mounted — e.g. the USB stick we booted from
   if lsblk -nro MOUNTPOINTS "/dev/$name" | grep -q .; then continue; fi
   candidates+=("$name")
@@ -134,9 +134,13 @@ disko --mode destroy,format,mount --yes-wipe-all-disks --flake "path:$work#survi
 announce 6 "Install (copies the whole system — this takes a while)"
 # Offline: without internet, nix turns substitution off — then it can't even copy
 # the pinned flake inputs from this live system into /mnt and tries GitHub.
-# substitute=true keeps copying from the local store ("auto"); no remote caches.
+# - substitute=true keeps copying from the live store (nixos-install adds it as
+#   the "auto" substituter; don't override `substituters`, that drops it again);
+# - always-allow-substitutes: copy even derivations marked "build locally"
+#   (buildEnv, writeText, …) — rebuilding them needs tools the ISO doesn't carry.
+# Verified by an offline QEMU install from the ISO (round B review).
 nixos-install --flake "path:$work#survival-kit" --no-root-passwd --no-channel-copy \
-  --option substitute true --option substituters ""
+  --option substitute true --option always-allow-substitutes true
 
 announce 7 "Hand the configuration over to /etc/nixos"
 mkdir -p /mnt/etc/nixos

@@ -10,6 +10,7 @@
 let
   cfg = config.survivalKit.firstBoot;
   marker = "/var/lib/survival-kit/firstboot-done";
+  namefile = "/var/lib/survival-kit/display-name"; # written by firstboot.sh
   prompt = pkgs.writeShellApplication {
     name = "survival-kit-firstboot";
     runtimeInputs = with pkgs; [
@@ -36,6 +37,25 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Quiet console: otherwise "[ OK ] Started …" lines print into the prompt on
+    # tty1 (services still starting). Failures are still shown.
+    boot.kernelParams = [
+      "quiet"
+      "systemd.show_status=error"
+    ];
+    boot.consoleLogLevel = lib.mkDefault 3; # kernel: errors only (tests raise it)
+
+    # NixOS rewrites /etc/passwd from the config at every activation (boot,
+    # rebuild), which would wipe the name set at first boot — re-apply it.
+    system.activationScripts.survival-kit-display-name = {
+      deps = [ "users" ];
+      text = ''
+        if [ -s ${namefile} ]; then
+          ${pkgs.shadow}/bin/usermod -c "$(cat ${namefile})" ${lib.escapeShellArg cfg.user} || true
+        fi
+      '';
+    };
+
     systemd.services.survival-kit-firstboot = {
       description = "survival-kit first boot: set name and password";
       wantedBy = [
