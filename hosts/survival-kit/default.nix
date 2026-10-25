@@ -3,6 +3,7 @@
   # pull in the base system + disk layout
   imports = [
     ../../modules/base
+    ../../modules/services
     ./disko.nix
   ];
 

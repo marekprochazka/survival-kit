@@ -12,6 +12,7 @@ let
   # Layer 2: add new eval checks here — CI picks them up via `eval` automatically.
   evalChecks = {
     eval-disk = import ./eval-disk.nix args;
+    eval-web = import ./eval-web.nix args;
   };
 in
 evalChecks
