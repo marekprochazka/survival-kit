@@ -33,6 +33,9 @@
       # `nix fmt` → format the whole repo with the pinned nixfmt
       formatter.${system} = pkgs.nixfmt-tree;
 
+      # standalone builds, e.g. `nix build .#survival-kit-manual`
+      packages.${system}.survival-kit-manual = pkgs.callPackage ./pkgs/survival-kit-manual.nix { };
+
       # tests (ADR-0003); `nix flake check` runs all, CI picks lint + eval-disk
       checks.${system} = import ./checks { inherit pkgs self inputs; };
     };

@@ -11,7 +11,9 @@ let
   cfg = config.survivalKit.services.kiwix;
   dataDir = "/var/lib/survival-kit/kiwix";
   port = 8080;
-  starterZims = import ./zims.nix { inherit pkgs; };
+  starterZims = import ./zims.nix { inherit pkgs; } // {
+    survival-kit = pkgs.callPackage ../../../pkgs/survival-kit-manual.nix { };
+  };
   # clean file names → clean book URLs (store paths would leak the hash)
   starterDir = pkgs.linkFarm "kiwix-starter" (
     lib.mapAttrsToList (name: path: {

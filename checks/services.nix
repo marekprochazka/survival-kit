@@ -35,7 +35,7 @@ pkgs.testers.runNixOSTest {
     inputs.disko.nixosModules.disko
   ];
   testScript = ''
-    STARTER_BOOKS = 5  # bundled ZIMs; raised as starter content lands
+    STARTER_BOOKS = 6  # bundled ZIMs; raised as starter content lands
     ZIMS = "/var/lib/survival-kit/kiwix/zims"
     CATALOG = "curl -sf 'http://wiki.deck/catalog/v2/entries?count=-1' | grep -c '<entry>' || true"
 
@@ -58,6 +58,9 @@ pkgs.testers.runNixOSTest {
         for book in ["archlinux_en_all_maxi", "devdocs_en_man", "devdocs_en_git",
                      "devdocs_en_bash", "devdocs_en_nix"]:
             machine.succeed(f"curl -sf -o /dev/null -w '%{{http_code}}' http://wiki.deck/content/{book} | grep -q 302")
+
+    with subtest("survival-kit manual is served"):
+        machine.wait_until_succeeds("curl -sfL http://wiki.deck/content/survival-kit | grep -q 'Welcome to survival-kit'")
 
     with subtest("health endpoint is up"):
         machine.succeed("curl -sf -o /dev/null http://deck/health/kiwix")

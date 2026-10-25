@@ -1,0 +1,5 @@
+body { font-family: system-ui, sans-serif; max-width: 46rem; margin: 0 auto; padding: 1rem; line-height: 1.55; }
+nav { display: flex; flex-wrap: wrap; gap: .4rem 1rem; padding-bottom: .6rem; border-bottom: 1px solid #8884; }
+code, pre { font-family: ui-monospace, monospace; background: #8882; border-radius: 4px; }
+code { padding: .1em .3em; }
+pre { padding: .8rem; overflow-x: auto; }
