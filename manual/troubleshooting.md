@@ -8,5 +8,8 @@ For the wiki: `kiwix-serve` and `kiwix-library`.
 `sudo systemctl restart kiwix-library` and check
 `journalctl -u kiwix-library` for "skipping unreadable".
 
+**Logging in on the text console.** The account is called `deck`; use the
+password you chose at the first start.
+
 **Something else.** Every system change can be undone — see
 [Rebuilding](rebuilding.html).

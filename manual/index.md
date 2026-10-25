@@ -3,6 +3,10 @@
 survival-kit is a self-contained computer: everything on it works **without
 internet**. Open the dashboard at <http://deck> to see what's available.
 
+On the very first start, survival-kit asks for your name and a password. The
+password is what `sudo` and the text console (Ctrl+Alt+F2) ask for — the
+desktop itself logs in automatically.
+
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
 - [Adding content](adding-content.html) — more wikis and documents
 - [Rebuilding](rebuilding.html) — changing the system safely
