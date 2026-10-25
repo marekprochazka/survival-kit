@@ -26,7 +26,7 @@ in
 
   config.disko.devices.disk.main = {
     type = "disk";
-    device = cfg.device;
+    inherit (cfg) device;
     content = {
       type = "gpt";
       partitions = {
