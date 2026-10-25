@@ -16,14 +16,24 @@
       disko,
       ...
     }@inputs:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+    in
     {
       nixosConfigurations.survival-kit = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
         specialArgs = { inherit inputs self; };
         modules = [
           ./hosts/survival-kit
           disko.nixosModules.disko
         ];
       };
+
+      # `nix fmt` → format the whole repo with the pinned nixfmt
+      formatter.${system} = pkgs.nixfmt-tree;
+
+      # tests (ADR-0003); `nix flake check` runs all, CI picks lint + eval-disk
+      checks.${system} = import ./checks { inherit pkgs self inputs; };
     };
 }

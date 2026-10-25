@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Layer-1 static checks (ADR-0003) before every commit: nixfmt, statix, deadnix.
+# Enable once per clone:  git config core.hooksPath .githooks
+# Emergency bypass:       git commit --no-verify
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: static checks (nixfmt, statix, deadnix)…"
+if ! nix build .#checks.x86_64-linux.lint --no-link --print-build-logs; then
+  echo "✗ static checks failed. Formatting → run 'nix fmt'; lints → see output above." >&2
+  exit 1
+fi
