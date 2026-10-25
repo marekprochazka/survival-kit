@@ -4,6 +4,7 @@
   lib,
   coreutils,
   util-linux,
+  cryptsetup,
   gnugrep,
   findutils,
   git,
@@ -15,7 +16,8 @@ writeShellApplication {
   name = "survival-kit-install";
   runtimeInputs = [
     coreutils
-    util-linux # lsblk
+    util-linux # lsblk, mountpoint, umount
+    cryptsetup # close a leftover cryptroot
     gnugrep
     findutils # xargs
     git

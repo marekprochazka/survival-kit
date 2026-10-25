@@ -50,6 +50,13 @@
     enableRedistributableFirmware = true;
   };
 
+  # /etc/nixos is a root-owned git repo (made by the installer); let users read
+  # it (`git -C /etc/nixos log`) without git's "dubious ownership" refusal
+  programs.git = {
+    enable = true;
+    config.safe.directory = "/etc/nixos";
+  };
+
   # security
   security.sudo.wheelNeedsPassword = true;
 
