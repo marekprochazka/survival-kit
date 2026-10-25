@@ -8,6 +8,13 @@
 }:
 let
   cfg = config.survivalKit.desktop;
+
+  # every file in ./xfconf → /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/<file>
+  # (system-wide defaults; a user's own changes in ~/.config take precedence)
+  xfconfDefaults = lib.mapAttrs' (
+    file: _:
+    lib.nameValuePair "xdg/xfce4/xfconf/xfce-perchannel-xml/${file}" { source = ./xfconf + "/${file}"; }
+  ) (builtins.readDir ./xfconf);
 in
 {
   options.survivalKit.desktop = {
@@ -42,5 +49,6 @@ in
       xfce4-systemload-plugin # panel CPU/RAM bars
       wmctrl # used by the dashboard autostart helper
     ];
+    environment.etc = xfconfDefaults;
   };
 }

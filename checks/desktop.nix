@@ -41,5 +41,16 @@ pkgs.testers.runNixOSTest {
         # the X display keeps focus for the later subtests
         machine.succeed("systemctl start getty@tty2.service")
         machine.wait_until_tty_matches("2", "login: ", timeout=60)
+
+    with subtest("xfconf defaults from /etc/xdg are in effect"):
+        machine.wait_until_succeeds(
+            "su - hera -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
+            + uid + "/bus xfconf-query -c xfce4-panel -p /plugins -l -v' | grep -q systemload",
+            timeout=60,
+        )
+        assert as_hera("xfconf-query -c xfwm4 -p /general/use_compositing") == "false"
+        assert as_hera(
+            "xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lock-screen-suspend-hibernate"
+        ) == "false"
   '';
 }

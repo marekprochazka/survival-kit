@@ -15,4 +15,12 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   !cfg.services.xserver.desktopManager.xfce.enableScreensaver
 ) "no screen locker (user decision: no auto-lock)";
+assert lib.assertMsg (lib.all
+  (f: cfg.environment.etc ? "xdg/xfce4/xfconf/xfce-perchannel-xml/${f}.xml")
+  [
+    "xfce4-panel"
+    "xfwm4"
+    "xfce4-power-manager"
+  ]
+) "xfconf defaults must be installed under /etc/xdg";
 pkgs.runCommand "eval-desktop" { } "touch $out"
