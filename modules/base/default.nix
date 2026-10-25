@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
 {
   networking.networkmanager.enable = true;
 
@@ -32,6 +32,22 @@
       dates = "weekly";
       options = "--delete-older-than 30d";
     };
+    # pinned nixpkgs for `nix shell nixpkgs#…` — works offline (source is on the system)
+    registry.nixpkgs.flake = inputs.nixpkgs;
+  };
+
+  # Offline rebuilds of /etc/nixos: keep this flake's input sources on the system.
+  system.extraDependencies = map (input: input.outPath) [
+    inputs.nixpkgs
+    inputs.disko
+  ];
+
+  # Same broad driver set as the installer ISO: whatever boots the ISO boots the
+  # install, and every install is the identical prebuilt system (offline install).
+  # The machine's detected config is kept for reference in hardware-detected.nix.
+  hardware = {
+    enableAllHardware = true;
+    enableRedistributableFirmware = true;
   };
 
   # security

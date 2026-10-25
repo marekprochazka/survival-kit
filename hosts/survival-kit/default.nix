@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 {
   # pull in the base system + disk layout
   imports = [
@@ -7,7 +7,10 @@
     ../../modules/dashboard
     ../../modules/desktop
     ./disko.nix
-  ];
+  ]
+  # written by survival-kit-install on installed machines (disk choice);
+  # absent in the dev repo → defaults (/dev/vda, unencrypted)
+  ++ lib.optional (builtins.pathExists ./selection.nix) ./selection.nix;
 
   networking.hostName = "survival-kit";
 

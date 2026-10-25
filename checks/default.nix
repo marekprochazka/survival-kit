@@ -14,6 +14,7 @@ let
     eval-disk = import ./eval-disk.nix args;
     eval-web = import ./eval-web.nix args;
     eval-desktop = import ./eval-desktop.nix args;
+    eval-install = import ./eval-install.nix args;
   };
 in
 evalChecks
