@@ -34,9 +34,15 @@
       formatter.${system} = pkgs.nixfmt-tree;
 
       # standalone builds, e.g. `nix build .#survival-kit-manual`
-      packages.${system}.survival-kit-manual = pkgs.callPackage ./pkgs/survival-kit-manual.nix { };
+      packages.${system} = {
+        survival-kit-manual = pkgs.callPackage ./pkgs/survival-kit-manual.nix { };
+        survival-kit-install = pkgs.callPackage ./pkgs/survival-kit-install.nix {
+          flakeSrc = self;
+          inherit (disko.packages.${system}) disko;
+        };
+      };
 
-      # tests (ADR-0003); `nix flake check` runs all, CI picks lint + eval-disk
+      # tests (ADR-0003); `nix flake check` runs all, CI builds lint + eval
       checks.${system} = import ./checks { inherit pkgs self inputs; };
     };
 }
