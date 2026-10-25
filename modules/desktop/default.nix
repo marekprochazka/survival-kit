@@ -88,8 +88,12 @@ in
           MoreFromMozilla = false;
         };
       };
-      # without this, typing "wiki.deck" in the address bar runs a web search
-      preferences."browser.fixup.domainsuffixwhitelist.${config.survivalKit.web.domain}" = true;
+      preferences = {
+        # without this, typing "wiki.deck" in the address bar runs a web search
+        "browser.fixup.domainsuffixwhitelist.${config.survivalKit.web.domain}" = true;
+        # power loss is common on a deck: start on the dashboard, not the crashed session
+        "browser.sessionstore.resume_from_crash" = false;
+      };
     };
 
     environment.etc = xfconfDefaults // {
