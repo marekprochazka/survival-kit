@@ -53,8 +53,9 @@ medium, switch on again.
 | `flake.nix` | the two systems: `survival-kit` (installed) and `installer` (ISO) |
 | `hosts/` | per-system settings |
 | `modules/` | base system, services (web registry, Kiwix), dashboard, desktop, first boot, installer |
-| `pkgs/` | the installer script, the manual builder |
+| `pkgs/` | the installer script, the wiki book builder |
 | `manual/` | end-user manual (shipped as a book in the offline wiki) |
+| `devguide/` | developer guide — how everything works and how to change it (also a wiki book) |
 | `checks/` | tests (lint, config checks, VM tests) |
 | `.githooks/` | pre-commit lint — enable with `git config core.hooksPath .githooks` |
 

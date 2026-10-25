@@ -32,7 +32,7 @@ pkgs.testers.runNixOSTest {
   node.specialArgs = { inherit inputs self; };
   nodes.machine = import ./host-node.nix { inherit inputs; };
   testScript = ''
-    STARTER_BOOKS = 6  # bundled ZIMs; raised as starter content lands
+    STARTER_BOOKS = 7  # bundled ZIMs; raised as starter content lands
     ZIMS = "/var/lib/survival-kit/kiwix/zims"
     CATALOG = "curl -sf 'http://wiki.deck/catalog/v2/entries?count=-1' | grep -c '<entry>' || true"
 
@@ -58,6 +58,10 @@ pkgs.testers.runNixOSTest {
 
     with subtest("survival-kit manual is served"):
         machine.wait_until_succeeds("curl -sfL http://wiki.deck/content/survival-kit | grep -q 'Welcome to survival-kit'")
+
+    with subtest("developer guide is served and linked from the manual"):
+        machine.wait_until_succeeds("curl -sfL http://wiki.deck/content/survival-kit-dev | grep -q 'survival-kit developer guide'")
+        machine.succeed("curl -sfL http://wiki.deck/content/survival-kit | grep -q 'content/survival-kit-dev'")
 
     with subtest("health endpoint is up"):
         machine.succeed("curl -sf -o /dev/null http://deck/health/kiwix")
@@ -92,6 +96,7 @@ pkgs.testers.runNixOSTest {
         assert 'data-health="/health/kiwix"' in page, "Wiki tile should carry its health URL"
         assert page.index("Wiki") < page.index("Manual"), "tiles must be sorted by order"
         assert 'href="http://wiki.deck/content/survival-kit"' in page, "Manual tile link"
+        assert 'href="http://wiki.deck/content/survival-kit-dev"' in page, "Developer guide tile link"
         machine.succeed("curl -sf -o /dev/null http://deck/style.css")
         machine.succeed("curl -sf -o /dev/null http://deck/status.js")
 

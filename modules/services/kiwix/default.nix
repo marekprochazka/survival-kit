@@ -11,8 +11,10 @@ let
   cfg = config.survivalKit.services.kiwix;
   dataDir = "/var/lib/survival-kit/kiwix";
   port = 8080;
+  books = pkgs.callPackage ../../../pkgs/books.nix { };
   starterZims = import ./zims.nix { inherit pkgs; } // {
-    survival-kit = pkgs.callPackage ../../../pkgs/survival-kit-manual.nix { };
+    survival-kit = books.manual;
+    survival-kit-dev = books.devguide;
   };
   # clean file names → clean book URLs (store paths would leak the hash)
   starterDir = pkgs.linkFarm "kiwix-starter" (
@@ -90,11 +92,19 @@ in
         description = "Offline encyclopedias, Linux & Nix docs";
         order = 10;
       };
-      dashboard.links.manual = lib.mkIf cfg.starterContent {
-        title = "Manual";
-        description = "How to use and maintain this box";
-        url = "http://wiki.${config.survivalKit.web.domain}/content/survival-kit";
-        order = 20;
+      dashboard.links = lib.mkIf cfg.starterContent {
+        manual = {
+          title = "Manual";
+          description = "How to use and maintain this box";
+          url = "http://wiki.${config.survivalKit.web.domain}/content/survival-kit";
+          order = 20;
+        };
+        devguide = {
+          title = "Developer guide";
+          description = "How survival-kit is built, and how to change it";
+          url = "http://wiki.${config.survivalKit.web.domain}/content/survival-kit-dev";
+          order = 30;
+        };
       };
     };
   };

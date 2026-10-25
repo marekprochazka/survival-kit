@@ -13,4 +13,5 @@ desktop itself logs in automatically.
 - [Troubleshooting](troubleshooting.html) — when something doesn't work
 
 The whole system is defined in one place: `/etc/nixos` (a Nix flake). Change it,
-rebuild, and the machine follows.
+rebuild, and the machine follows. How all of it works — and how to change it — is
+in the [developer guide](http://wiki.deck/content/survival-kit-dev).

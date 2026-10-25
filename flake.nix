@@ -47,7 +47,8 @@
 
       # standalone builds, e.g. `nix build .#survival-kit-manual`
       packages.${system} = {
-        survival-kit-manual = pkgs.callPackage ./pkgs/survival-kit-manual.nix { };
+        survival-kit-manual = (pkgs.callPackage ./pkgs/books.nix { }).manual;
+        survival-kit-devguide = (pkgs.callPackage ./pkgs/books.nix { }).devguide;
         survival-kit-install = pkgs.callPackage ./pkgs/survival-kit-install.nix {
           flakeSrc = self;
           inherit (disko.packages.${system}) disko;
