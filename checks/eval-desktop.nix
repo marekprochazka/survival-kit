@@ -23,4 +23,14 @@ assert lib.assertMsg (lib.all
     "xfce4-power-manager"
   ]
 ) "xfconf defaults must be installed under /etc/xdg";
+assert lib.assertMsg cfg.programs.firefox.enable "firefox must be enabled";
+assert lib.assertMsg (
+  cfg.programs.firefox.policies.Homepage.URL == "http://deck"
+) "firefox homepage must be the dashboard";
+assert lib.assertMsg (
+  cfg.programs.firefox.preferences."browser.fixup.domainsuffixwhitelist.deck" == true
+) "firefox must treat .deck as a real domain (else typing wiki.deck searches the web)";
+assert lib.assertMsg (
+  cfg.environment.etc ? "xdg/autostart/survival-kit-dashboard.desktop"
+) "dashboard autostart entry must exist";
 pkgs.runCommand "eval-desktop" { } "touch $out"

@@ -52,5 +52,17 @@ pkgs.testers.runNixOSTest {
         assert as_hera(
             "xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lock-screen-suspend-hibernate"
         ) == "false"
+
+    with subtest("Firefox opens the dashboard, maximized"):
+        machine.wait_for_window("survival-kit")  # dashboard <title> = hostname
+        # select by WM_CLASS: every wmctrl line also contains the hostname "survival-kit"
+        wid = machine.succeed("DISPLAY=:0 wmctrl -l -x | grep 'Navigator.firefox' | head -1 | cut -d' ' -f1").strip()
+        machine.wait_until_succeeds(
+            f"DISPLAY=:0 xprop -id {wid} _NET_WM_STATE | grep -q _NET_WM_STATE_MAXIMIZED_VERT",
+            timeout=60,
+        )
+        machine.succeed(f"DISPLAY=:0 xprop -id {wid} _NET_WM_STATE | grep -q _NET_WM_STATE_MAXIMIZED_HORZ")
+        machine.sleep(3)  # let the page paint before the screenshot
+        machine.screenshot("desktop")
   '';
 }
