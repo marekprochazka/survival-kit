@@ -3,5 +3,6 @@
 {
   imports = [
     ./web.nix
+    ./kiwix
   ];
 }

@@ -71,4 +71,11 @@ assert lib.assertMsg (hasFailure dupSubdomain "duplicate subdomain")
 assert lib.assertMsg (hasFailure dupPort "duplicate port") "duplicate ports must fail the build";
 assert lib.assertMsg (hasFailure bareDomain "bare domain")
   "subdomain equal to the domain must fail the build";
+assert lib.assertMsg (
+  base.config.services.nginx.virtualHosts."wiki.deck".locations."/".proxyPass
+  == "http://127.0.0.1:8080"
+) "wiki.deck should proxy to Kiwix on 127.0.0.1:8080";
+assert lib.assertMsg (
+  base.config.services.kiwix-serve.address == "127.0.0.1"
+) "kiwix-serve must listen on 127.0.0.1 only";
 pkgs.runCommand "eval-web" { } "touch $out"

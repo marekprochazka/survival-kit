@@ -22,4 +22,5 @@ evalChecks
     pkgs.lib.mapAttrsToList (name: path: { inherit name path; }) evalChecks
   );
   boot = import ./boot.nix args;
+  services = import ./services.nix args;
 }

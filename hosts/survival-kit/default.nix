@@ -9,6 +9,9 @@
 
   networking.hostName = "survival-kit";
 
+  # services (no lite/full profiles yet — ADR-0002 profiles come with ≥2 services)
+  survivalKit.services.kiwix.enable = true;
+
   users.users.hera = {
     # as hera syndulla
     isNormalUser = true;
