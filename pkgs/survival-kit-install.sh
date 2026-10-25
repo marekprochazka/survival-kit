@@ -154,5 +154,13 @@ git -C /mnt/etc/nixos -c user.name="survival-kit installer" -c user.email="insta
   commit -qm "installed by survival-kit-install on $(date -I) (disk $disk, encrypted: $encrypt)"
 
 trap - ERR
-echo
-echo "Done. Remove the install medium and reboot."
+cat <<EOF
+
+Done! survival-kit is installed on /dev/$disk.
+
+Next:
+  1. Shut down:   sudo poweroff
+  2. Remove the install medium (USB stick / DVD — in a VM: eject the ISO),
+     otherwise the machine starts this installer again.
+  3. Switch on again. The first start asks for your name and a password.
+EOF
