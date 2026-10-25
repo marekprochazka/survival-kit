@@ -16,6 +16,7 @@ let
     eval-desktop = import ./eval-desktop.nix args;
     eval-install = import ./eval-install.nix args;
     eval-firstboot = import ./eval-firstboot.nix args;
+    eval-iso = import ./eval-iso.nix args;
   };
 in
 evalChecks

@@ -21,13 +21,25 @@
       pkgs = nixpkgs.legacyPackages.${system};
     in
     {
-      nixosConfigurations.survival-kit = nixpkgs.lib.nixosSystem {
-        inherit system;
-        specialArgs = { inherit inputs self; };
-        modules = [
-          ./hosts/survival-kit
-          disko.nixosModules.disko
-        ];
+      nixosConfigurations = {
+        # the installed system
+        survival-kit = nixpkgs.lib.nixosSystem {
+          inherit system;
+          specialArgs = { inherit inputs self; };
+          modules = [
+            ./hosts/survival-kit
+            disko.nixosModules.disko
+          ];
+        };
+        # the live installer ISO (see packages.iso)
+        installer = nixpkgs.lib.nixosSystem {
+          inherit system;
+          specialArgs = { inherit inputs self; };
+          modules = [
+            "${nixpkgs}/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix"
+            ./hosts/installer
+          ];
+        };
       };
 
       # `nix fmt` → format the whole repo with the pinned nixfmt
@@ -40,6 +52,8 @@
           flakeSrc = self;
           inherit (disko.packages.${system}) disko;
         };
+        # the installer ISO (big: ~4–5 GB) — build with utils/build-iso
+        iso = self.nixosConfigurations.installer.config.system.build.isoImage;
       };
 
       # tests (ADR-0003); `nix flake check` runs all, CI builds lint + eval
