@@ -77,6 +77,13 @@ pkgs.testers.runNixOSTest {
         machine.wait_for_unit("kiwix-serve.service")
         wait_books(STARTER_BOOKS + 1)
 
+    with subtest("a dangling symlink in zims/ does not take the wiki down"):
+        machine.succeed("ln -s /nonexistent/gone.zim " + ZIMS + "/gone.zim")
+        machine.succeed("systemctl restart kiwix-library.service")
+        machine.wait_for_unit("kiwix-serve.service")
+        wait_books(STARTER_BOOKS + 1)
+        machine.succeed("rm " + ZIMS + "/gone.zim")
+
     with subtest("a root-only (0600) drop-in is still served"):
         machine.succeed("install -m 0600 ${privateZim} " + ZIMS + "/private-test.zim")
         machine.succeed("systemctl restart kiwix-library.service")

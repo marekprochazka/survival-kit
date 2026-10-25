@@ -43,9 +43,15 @@ in
 
     systemd.services.kiwix-library = {
       description = "Rebuild the Kiwix catalog from available ZIM files";
-      wantedBy = [ "multi-user.target" ];
+      # Wants (not Requires): if a rebuild fails, kiwix-serve keeps running on the
+      # last good library.xml. A successful rebuild restarts kiwix-serve (end of
+      # script) — --monitorLibrary alone misses a 2nd rebuild within the same
+      # second (mtime has 1 s granularity).
+      wantedBy = [
+        "multi-user.target"
+        "kiwix-serve.service"
+      ];
       before = [ "kiwix-serve.service" ];
-      requiredBy = [ "kiwix-serve.service" ];
       path = [ config.services.kiwix-serve.package ];
       serviceConfig = {
         Type = "oneshot";
@@ -62,11 +68,17 @@ in
           done
         ''}
         for zim in ${dataDir}/zims/*.zim; do
-          chmod a+r "$zim" # kiwix-serve runs as an unprivileged DynamicUser
-          kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2
+          # chmod: kiwix-serve runs as an unprivileged DynamicUser. Guarded like
+          # kiwix-manage — one odd entry (dangling link, read-only media) must not
+          # abort the rebuild (the script runs under `set -e`).
+          { chmod a+r "$zim" && kiwix-manage "$tmp" add "$zim"; } ||
+            echo "kiwix-library: skipping unreadable $zim" >&2
         done
         chmod 0644 "$tmp"
         mv -f "$tmp" ${dataDir}/library.xml # atomic: kiwix-serve never sees a half-written file
+        # reload a running server; no-op at boot (not started yet). --no-block:
+        # don't wait on a job that is itself ordered after this unit.
+        ${config.systemd.package}/bin/systemctl --no-block try-restart kiwix-serve.service
       '';
     };
 

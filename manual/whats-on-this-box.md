@@ -5,7 +5,8 @@
 | <http://deck> | Dashboard — every service, with a live status dot |
 | <http://wiki.deck> | Wiki — offline encyclopedias and documentation (Kiwix) |
 
-From another device on the same network, use <http://survival-kit.local>.
+These addresses work on this box itself. Reaching them from other devices
+(phones, laptops) comes with the planned Wi-Fi hub mode.
 
 The wiki ships with: the **Arch Wiki** (general Linux help), **man pages**,
 **Nix**, **bash** and **git** references, and this manual.
