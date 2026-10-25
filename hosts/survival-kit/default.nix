@@ -5,6 +5,7 @@
     ../../modules/base
     ../../modules/services
     ../../modules/dashboard
+    ../../modules/desktop
     ./disko.nix
   ];
 
@@ -20,7 +21,13 @@
     initialPassword = "changeme";
   };
 
-  services.getty.autologinUser = "hera";
+  survivalKit.desktop = {
+    enable = true;
+    autoLoginUser = "hera"; # dev user; replaced by first-boot user creation later
+  };
+
+  # dev VM (utils/run) only — XFCE + Firefox need more than the 1 GB default
+  virtualisation.vmVariant.virtualisation.memorySize = 2048;
 
   # The release this system was first installed with. Keeps stateful services
   # compatible with their existing on-disk data. Never bump it on upgrades.

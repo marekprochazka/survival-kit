@@ -13,6 +13,7 @@ let
   evalChecks = {
     eval-disk = import ./eval-disk.nix args;
     eval-web = import ./eval-web.nix args;
+    eval-desktop = import ./eval-desktop.nix args;
   };
 in
 evalChecks
@@ -23,4 +24,5 @@ evalChecks
   );
   boot = import ./boot.nix args;
   services = import ./services.nix args;
+  desktop = import ./desktop.nix args;
 }

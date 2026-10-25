@@ -10,10 +10,7 @@
 pkgs.testers.runNixOSTest {
   name = "boot";
   node.specialArgs = { inherit inputs self; };
-  nodes.machine.imports = [
-    ../hosts/survival-kit
-    inputs.disko.nixosModules.disko
-  ];
+  nodes.machine = import ./host-node.nix { inherit inputs; };
   testScript = ''
     machine.wait_for_unit("multi-user.target")
     # 'running' (exit 0) only if no unit failed; 'degraded' exits non-zero

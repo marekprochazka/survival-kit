@@ -30,10 +30,7 @@ in
 pkgs.testers.runNixOSTest {
   name = "services";
   node.specialArgs = { inherit inputs self; };
-  nodes.machine.imports = [
-    ../hosts/survival-kit
-    inputs.disko.nixosModules.disko
-  ];
+  nodes.machine = import ./host-node.nix { inherit inputs; };
   testScript = ''
     STARTER_BOOKS = 6  # bundled ZIMs; raised as starter content lands
     ZIMS = "/var/lib/survival-kit/kiwix/zims"
