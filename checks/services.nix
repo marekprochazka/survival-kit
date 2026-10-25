@@ -35,7 +35,7 @@ pkgs.testers.runNixOSTest {
     inputs.disko.nixosModules.disko
   ];
   testScript = ''
-    STARTER_BOOKS = 0  # bundled ZIMs; raised as starter content lands
+    STARTER_BOOKS = 5  # bundled ZIMs; raised as starter content lands
     ZIMS = "/var/lib/survival-kit/kiwix/zims"
     CATALOG = "curl -sf 'http://wiki.deck/catalog/v2/entries?count=-1' | grep -c '<entry>' || true"
 
@@ -53,6 +53,11 @@ pkgs.testers.runNixOSTest {
     with subtest("wiki.deck resolves and proxies to Kiwix"):
         machine.wait_until_succeeds("curl -sf -o /dev/null http://wiki.deck/")
         wait_books(STARTER_BOOKS)
+
+    with subtest("starter books are served under clean names"):
+        for book in ["archlinux_en_all_maxi", "devdocs_en_man", "devdocs_en_git",
+                     "devdocs_en_bash", "devdocs_en_nix"]:
+            machine.succeed(f"curl -sf -o /dev/null -w '%{{http_code}}' http://wiki.deck/content/{book} | grep -q 302")
 
     with subtest("health endpoint is up"):
         machine.succeed("curl -sf -o /dev/null http://deck/health/kiwix")

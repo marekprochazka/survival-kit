@@ -4,16 +4,30 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
   cfg = config.survivalKit.services.kiwix;
   dataDir = "/var/lib/survival-kit/kiwix";
   port = 8080;
+  starterZims = import ./zims.nix { inherit pkgs; };
+  # clean file names → clean book URLs (store paths would leak the hash)
+  starterDir = pkgs.linkFarm "kiwix-starter" (
+    lib.mapAttrsToList (name: path: {
+      name = "${name}.zim";
+      inherit path;
+    }) starterZims
+  );
 in
 {
   options.survivalKit.services.kiwix = {
     enable = lib.mkEnableOption "Kiwix offline wiki (kiwix-serve)";
+    starterContent = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Bundle the starter ZIMs (Linux/Nix docs, survival-kit manual) in the image.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -40,6 +54,11 @@ in
         tmp=$(mktemp --suffix=.xml ${dataDir}/.library.XXXXXX)
         printf '<library version="20110515"></library>\n' > "$tmp"
         shopt -s nullglob
+        ${lib.optionalString cfg.starterContent ''
+          for zim in ${starterDir}/*.zim; do
+            kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2
+          done
+        ''}
         for zim in ${dataDir}/zims/*.zim; do
           chmod a+r "$zim" # kiwix-serve runs as an unprivileged DynamicUser
           kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2
