@@ -4,6 +4,7 @@
   imports = [
     ../../modules/base
     ../../modules/services
+    ../../modules/dashboard
     ./disko.nix
   ];
 

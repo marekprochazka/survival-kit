@@ -70,12 +70,20 @@ in
       '';
     };
 
-    survivalKit.registry.kiwix = {
-      subdomain = "wiki";
-      inherit port;
-      title = "Wiki";
-      description = "Offline encyclopedias, Linux & Nix docs";
-      order = 10;
+    survivalKit = {
+      registry.kiwix = {
+        subdomain = "wiki";
+        inherit port;
+        title = "Wiki";
+        description = "Offline encyclopedias, Linux & Nix docs";
+        order = 10;
+      };
+      dashboard.links.manual = lib.mkIf cfg.starterContent {
+        title = "Manual";
+        description = "How to use and maintain this box";
+        url = "http://wiki.${config.survivalKit.web.domain}/content/survival-kit";
+        order = 20;
+      };
     };
   };
 }

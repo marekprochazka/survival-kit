@@ -83,6 +83,18 @@ pkgs.testers.runNixOSTest {
         wait_books(STARTER_BOOKS + 2)
         machine.wait_until_succeeds("curl -sfL http://wiki.deck/content/private-test | grep -q 'private-test test page'")
 
+    with subtest("dashboard lists services and links, in order"):
+        page = machine.succeed("curl -sf http://deck/")
+        assert 'data-health="/health/kiwix"' in page, "Wiki tile should carry its health URL"
+        assert page.index("Wiki") < page.index("Manual"), "tiles must be sorted by order"
+        assert 'href="http://wiki.deck/content/survival-kit"' in page, "Manual tile link"
+        machine.succeed("curl -sf -o /dev/null http://deck/style.css")
+        machine.succeed("curl -sf -o /dev/null http://deck/status.js")
+
+    with subtest("the box's IP and mDNS name land on the dashboard"):
+        machine.succeed("curl -sf http://127.0.0.1/ | grep -q 'data-health'")
+        machine.succeed("curl -sf -H 'Host: survival-kit.local' http://127.0.0.1/ | grep -q 'data-health'")
+
     with subtest("down detection: health returns 502 when Kiwix is stopped"):
         machine.succeed("systemctl stop kiwix-serve.service")
         code = machine.succeed("curl -s -o /dev/null -w '%{http_code}' http://deck/health/kiwix")
