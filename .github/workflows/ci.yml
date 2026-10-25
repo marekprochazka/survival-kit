@@ -12,5 +12,5 @@ jobs:
       - uses: cachix/install-nix-action@v31
       - name: Static checks (nixfmt, statix, deadnix)
         run: nix build .#checks.x86_64-linux.lint --print-build-logs
-      - name: Eval assertions
-        run: nix build .#checks.x86_64-linux.eval-disk --print-build-logs
+      - name: Eval assertions (all layer-2 checks)
+        run: nix build .#checks.x86_64-linux.eval --print-build-logs
