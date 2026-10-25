@@ -6,6 +6,7 @@
     ../../modules/services
     ../../modules/dashboard
     ../../modules/desktop
+    ../../modules/firstboot
     ./disko.nix
   ]
   # written by survival-kit-install on installed machines (disk choice);
@@ -17,16 +18,17 @@
   # services (no lite/full profiles yet — ADR-0002 profiles come with ≥2 services)
   survivalKit.services.kiwix.enable = true;
 
-  users.users.hera = {
-    # as hera syndulla
+  # The owner's account. Fixed name (autologin needs it at build time); the
+  # display name and password are set by the first-boot prompt (modules/firstboot).
+  users.users.deck = {
     isNormalUser = true;
     extraGroups = [ "wheel" ]; # sudo rights
-    initialPassword = "changeme";
+    initialHashedPassword = "!"; # locked until first boot sets it
   };
 
   survivalKit.desktop = {
     enable = true;
-    autoLoginUser = "hera"; # dev user; replaced by first-boot user creation later
+    autoLoginUser = "deck";
   };
 
   # dev VM (utils/run) only — XFCE + Firefox need more than the 1 GB default

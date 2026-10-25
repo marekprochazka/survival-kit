@@ -16,21 +16,21 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     uid = ""  # set after login; str (not None) so the driver's type check passes
 
-    def as_hera(cmd):
+    def as_deck(cmd):
         return machine.succeed(
-            "su - hera -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
+            "su - deck -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
             + uid + "/bus " + cmd + "'"
         ).strip()
 
     with subtest("autologin into XFCE, no login prompt"):
         machine.wait_for_x()
-        machine.wait_for_file("/home/hera/.Xauthority")
-        machine.succeed("xauth merge /home/hera/.Xauthority")
-        uid = machine.succeed("id -u hera").strip()
+        machine.wait_for_file("/home/deck/.Xauthority")
+        machine.succeed("xauth merge /home/deck/.Xauthority")
+        uid = machine.succeed("id -u deck").strip()
         # -f (full cmdline): nixpkgs wraps XFCE binaries, so the process name is
-        # ".xfce4-session-wrapped" and -x never matches; -u hera skips our own shell
-        machine.wait_until_succeeds("pgrep -u hera -f xfce4-session", timeout=120)
-        machine.wait_until_succeeds("pgrep -u hera -f xfce4-panel", timeout=120)
+        # ".xfce4-session-wrapped" and -x never matches; -u deck skips our own shell
+        machine.wait_until_succeeds("pgrep -u deck -f xfce4-session", timeout=120)
+        machine.wait_until_succeeds("pgrep -u deck -f xfce4-panel", timeout=120)
         machine.wait_for_window("xfce4-panel")
 
     with subtest("no screen locker installed"):
@@ -44,12 +44,12 @@ pkgs.testers.runNixOSTest {
 
     with subtest("xfconf defaults from /etc/xdg are in effect"):
         machine.wait_until_succeeds(
-            "su - hera -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
+            "su - deck -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
             + uid + "/bus xfconf-query -c xfce4-panel -p /plugins -l -v' | grep -q systemload",
             timeout=60,
         )
-        assert as_hera("xfconf-query -c xfwm4 -p /general/use_compositing") == "false"
-        assert as_hera(
+        assert as_deck("xfconf-query -c xfwm4 -p /general/use_compositing") == "false"
+        assert as_deck(
             "xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lock-screen-suspend-hibernate"
         ) == "false"
 
@@ -71,15 +71,15 @@ pkgs.testers.runNixOSTest {
     def restart_session():
         # the graphical half of a reboot: LightDM autologins again, autostart runs
         machine.succeed("systemctl restart display-manager.service")
-        machine.wait_until_succeeds("pgrep -u hera -f xfce4-session", timeout=120)
-        machine.wait_for_file("/home/hera/.Xauthority")
+        machine.wait_until_succeeds("pgrep -u deck -f xfce4-session", timeout=120)
+        machine.wait_for_file("/home/deck/.Xauthority")
         machine.sleep(2)
-        machine.succeed("xauth merge /home/hera/.Xauthority")
+        machine.succeed("xauth merge /home/deck/.Xauthority")
 
     with subtest("after a crash (power loss) Firefox starts on the dashboard, not old pages"):
         # open a wiki page in the running Firefox (remote open goes via the session bus)
         machine.succeed(
-            "su - hera -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
+            "su - deck -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
             + uid + "/bus firefox http://wiki.deck/ >&2 &'"
         )
         machine.wait_until_succeeds(
@@ -87,13 +87,13 @@ pkgs.testers.runNixOSTest {
             timeout=60,
         )
         machine.sleep(20)  # let session store save the wiki tab (15 s interval)
-        machine.succeed("pkill -9 -u hera -f firefox")
+        machine.succeed("pkill -9 -u deck -f firefox")
         restart_session()
         machine.wait_until_succeeds(DASHBOARD_TAB, timeout=90)
 
     with subtest("dashboard still opens when nginx comes up late (slow first boot)"):
-        machine.succeed("pkill -u hera -f firefox || true")
-        machine.wait_until_fails("pgrep -u hera -f firefox", timeout=60)
+        machine.succeed("pkill -u deck -f firefox || true")
+        machine.wait_until_fails("pgrep -u deck -f firefox", timeout=60)
         machine.succeed("systemctl stop nginx.service")
         restart_session()
         machine.sleep(40)  # slower than the helper's original 30 s wait

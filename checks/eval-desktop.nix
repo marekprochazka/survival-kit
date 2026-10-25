@@ -6,8 +6,8 @@ let
   dm = cfg.services.displayManager;
 in
 assert lib.assertMsg (
-  dm.autoLogin.enable && dm.autoLogin.user == "hera"
-) "desktop autologin must log in hera";
+  dm.autoLogin.enable && dm.autoLogin.user == "deck"
+) "desktop autologin must log in deck";
 assert lib.assertMsg (dm.defaultSession == "xfce") "default session must be xfce";
 assert lib.assertMsg (
   cfg.services.getty.autologinUser == null

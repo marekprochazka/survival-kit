@@ -6,4 +6,5 @@
     inputs.disko.nixosModules.disko
   ];
   virtualisation.memorySize = 2048; # XFCE + Firefox need more than the 1 GB default
+  survivalKit.firstBoot.enable = false; # the firstboot test re-enables it
 }

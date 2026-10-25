@@ -15,6 +15,7 @@ let
     eval-web = import ./eval-web.nix args;
     eval-desktop = import ./eval-desktop.nix args;
     eval-install = import ./eval-install.nix args;
+    eval-firstboot = import ./eval-firstboot.nix args;
   };
 in
 evalChecks
@@ -26,4 +27,5 @@ evalChecks
   boot = import ./boot.nix args;
   services = import ./services.nix args;
   desktop = import ./desktop.nix args;
+  firstboot = import ./firstboot.nix args;
 }
