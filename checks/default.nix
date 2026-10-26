@@ -23,6 +23,7 @@ let
     eval-vaultwarden = import ./eval-vaultwarden.nix args;
     eval-ollama = import ./eval-ollama.nix args;
     eval-profiles = import ./eval-profiles.nix args;
+    content-unit = import ./content-unit.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
