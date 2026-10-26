@@ -38,6 +38,13 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = config.users.users ? ${cfg.autoLoginUser};
+        message = "survivalKit.desktop.autoLoginUser = \"${cfg.autoLoginUser}\" is not a user (users.users)";
+      }
+    ];
+
     services.xserver = {
       enable = true;
       xkb.layout = "us";
@@ -87,12 +94,19 @@ in
           FeatureRecommendations = false;
           MoreFromMozilla = false;
         };
+        CaptivePortal = false; # no "is there a login portal?" probes to the internet
+        NetworkPrediction = false; # no DNS/link prefetching
       };
       preferences = {
         # without this, typing "wiki.deck" in the address bar runs a web search
         "browser.fixup.domainsuffixwhitelist.${config.survivalKit.web.domain}" = true;
+        # …and typing just "deck" opens the dashboard
+        "browser.fixup.domainwhitelist.${config.survivalKit.web.domain}" = true;
         # power loss is common on a deck: start on the dashboard, not the crashed session
         "browser.sessionstore.resume_from_crash" = false;
+        # and don't offer "Open previous tabs?" afterwards (-1 = never; Firefox 152:
+        # SessionWindowUI.sys.mjs shows the bar only while the count is 0 or 1)
+        "browser.startup.couldRestoreSession.count" = -1;
       };
     };
 

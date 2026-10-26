@@ -15,8 +15,9 @@ done
 firefox &
 
 for _ in $(seq 1 120); do
-  if wmctrl -l | grep -q "Mozilla Firefox"; then
-    wmctrl -r "Mozilla Firefox" -b add,maximized_vert,maximized_horz
+  # match by window class (stable), not by title (changes with page and version)
+  if wmctrl -lx | grep -q "Navigator.firefox"; then
+    wmctrl -x -r Navigator.firefox -b add,maximized_vert,maximized_horz
     exit 0
   fi
   sleep 0.5

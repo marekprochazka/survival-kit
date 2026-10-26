@@ -4,6 +4,10 @@ let
   inherit (pkgs) lib;
   cfg = self.nixosConfigurations.survival-kit.config;
   dm = cfg.services.displayManager;
+  noSuchUser =
+    (self.nixosConfigurations.survival-kit.extendModules {
+      modules = [ { survivalKit.desktop.autoLoginUser = lib.mkForce "nobody-here"; } ];
+    }).config;
 in
 assert lib.assertMsg (
   dm.autoLogin.enable && dm.autoLogin.user == "deck"
@@ -33,4 +37,16 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   cfg.environment.etc ? "xdg/autostart/survival-kit-dashboard.desktop"
 ) "dashboard autostart entry must exist";
+assert lib.assertMsg (
+  cfg.programs.firefox.preferences."browser.startup.couldRestoreSession.count" == -1
+) "no 'Open previous tabs?' bar after a crash";
+assert lib.assertMsg (
+  cfg.programs.firefox.preferences."browser.fixup.domainwhitelist.deck" == true
+) "typing just 'deck' must open the dashboard";
+assert lib.assertMsg (
+  !cfg.programs.firefox.policies.CaptivePortal && !cfg.programs.firefox.policies.NetworkPrediction
+) "no captive-portal probes or link prefetching (offline box)";
+assert lib.assertMsg (lib.any (
+  x: !x.assertion && lib.hasInfix "autoLoginUser" x.message
+) noSuchUser.assertions) "an autologin user that doesn't exist must fail the build clearly";
 pkgs.runCommand "eval-desktop" { } "touch $out"
