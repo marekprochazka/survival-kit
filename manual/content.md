@@ -19,7 +19,9 @@ Before anything is copied, the box checks there is enough space (it always keeps
 2 GB free; a model needs about twice its size for a moment).
 
 **Newer versions.** Kiwix downloads carry a date in their name (`…_2026-12.zim`); the box
-stores them without it, so a newer download replaces the older one — it asks first.
+stores them without it, so a newer download replaces the older one — it asks first. While
+the new file uploads, the old one stays until the new one is complete — so replacing a big
+book needs room for the new one too.
 
 **Books that came with the box** (shown in grey) can be replaced the same way: importing a
 newer Arch Wiki replaces the built-in one, after you confirm. Delete the import and the

@@ -22,7 +22,7 @@ are one file per request with the raw file as the body).
 | Request | Does |
 |---|---|
 | `GET /health` | `ok` (the dashboard dot) |
-| `GET /api/status` | disk, wiki imports, built-ins (`replaced`, `protected`), models (`null` on lite), locations |
+| `GET /api/status` | disk, wiki imports, built-ins (`replaced`, `protected`), models (`null` on lite), `models_error` (set when Ollama doesn't answer — the rest of the page keeps working), locations |
 | `GET /api/check?kind=&file=&size=[&model=]` | the stored name, whether it exists (`import`/`builtin`), space check — before uploading |
 | `PUT /api/upload?kind=&file=[&model=]` | body = the file; `Content-Length` required |
 | `DELETE /api/wiki/<name>`, `DELETE /api/models/<name>` | delete |

@@ -37,6 +37,13 @@ class Names(unittest.TestCase):
             content.wiki_name("survival-kit.zim", PROTECTED)
         self.assertEqual(cm.exception.status, 403)
 
+    def test_names_too_long_refused(self):
+        with self.assertRaises(Refused):
+            content.wiki_name("a" * 300 + ".zim", PROTECTED)
+        with self.assertRaises(Refused):
+            content.model_name("a" * 300 + ".gguf")
+        self.assertEqual(content.wiki_name("a" * 200 + ".zim", PROTECTED), "a" * 200 + ".zim")
+
     def test_model_name(self):
         self.assertEqual(
             content.model_name("Llama-3.2-3B-Instruct-Q4_K_M.gguf"), "llama-3.2-3b-instruct-q4_k_m"
@@ -130,6 +137,16 @@ class WikiTest(unittest.TestCase):
         self.assertIn("not a readable wiki book", str(cm.exception))
         self.assertEqual(list(self.incoming.iterdir()), [])
         self.assertFalse((self.zims / "bad.zim").exists())
+
+    def test_wiki_install_error_removes_temp(self):
+        def broken(path):
+            raise RuntimeError("kiwix-manage missing")
+
+        self.wiki.validate = broken
+        tmp = self.upload()
+        with self.assertRaises(RuntimeError):
+            self.wiki.install(tmp, "a.zim")
+        self.assertEqual(list(self.incoming.iterdir()), [])
 
     def test_wiki_builtin_replaced_flag(self):
         self.assertEqual(self.wiki.exists("devdocs_en_git.zim"), "builtin")

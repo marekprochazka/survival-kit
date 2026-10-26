@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 GIB = 1024**3
+MAX_NAME = 200  # characters; file systems allow 255 bytes per name
 
 
 class Refused(Exception):
@@ -46,6 +47,8 @@ def wiki_name(filename, protected):
     stem = re.sub(r"[^A-Za-z0-9._-]", "_", stem).lstrip(".")
     if not stem:
         raise Refused("this file name can't be used for a wiki book")
+    if len(stem) > MAX_NAME:
+        raise Refused(f"this file name is too long (at most {MAX_NAME} characters)")
     if stem in protected:
         raise Refused(f"'{stem}' is the box's own manual and can't be replaced", status=403)
     return stem + ".zim"
@@ -56,6 +59,8 @@ def clean_model_name(name):
     name = re.sub(r"[^a-z0-9._-]+", "-", name.strip().lower()).strip("-._")
     if not name:
         raise Refused("this model name can't be used")
+    if len(name) > MAX_NAME:
+        raise Refused(f"this model name is too long (at most {MAX_NAME} characters)")
     return name
 
 
@@ -156,15 +161,17 @@ class Wiki:
         return "builtin" if name in self.builtins else None
 
     def install(self, tmp, name):
-        target = self._path(name)
-        if name[: -len(".zim")] in self.protected:
-            Path(tmp).unlink(missing_ok=True)
-            raise Refused("the box's own manuals can't be replaced", status=403)
-        if not self.validate(tmp):
-            Path(tmp).unlink(missing_ok=True)
-            raise Refused("not a readable wiki book")
-        os.chmod(tmp, 0o644)  # kiwix-serve runs unprivileged
-        os.replace(tmp, target)  # atomic: same directory tree
+        try:
+            target = self._path(name)
+            if name[: -len(".zim")] in self.protected:
+                raise Refused("the box's own manuals can't be replaced", status=403)
+            if not self.validate(tmp):
+                raise Refused("not a readable wiki book")
+            os.chmod(tmp, 0o644)  # kiwix-serve runs unprivileged
+            os.replace(tmp, target)  # atomic: same directory tree
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)  # whatever went wrong, no upload is left behind
+            raise
         self.refresh()
 
     def delete(self, name):

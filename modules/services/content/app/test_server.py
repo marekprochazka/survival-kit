@@ -79,7 +79,8 @@ class Api(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(s["disk"]["total"], 100 * GB)
         self.assertEqual(s["disk"]["free"], 50 * GB)
-        self.assertEqual(set(s), {"disk", "wiki", "builtins", "models", "locations"})
+        self.assertEqual(set(s), {"disk", "wiki", "builtins", "models", "models_error", "locations"})
+        self.assertIsNone(s["models_error"])
         self.assertEqual(s["models"], [])
 
     def test_upload_wiki_roundtrip(self):
@@ -102,6 +103,38 @@ class Api(unittest.TestCase):
         status, r = self.json("GET", f"/api/check?kind=wiki&file=big.zim&size={60 * GB}")
         self.assertEqual(status, 400)
         self.assertIn("not enough space", r["error"])
+
+    def test_page_survives_ollama_down(self):
+        def down():
+            raise OSError("connection refused")
+
+        self.ollama.tags = down
+        status, page = self.call("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertIn(b"devdocs_en_git", page)  # the wiki part still works
+        status, s = self.json("GET", "/api/status")
+        self.assertEqual(status, 200)
+        if self.models_enabled:
+            self.assertIn(b"not available right now", page)
+            self.assertEqual(s["models_error"], "not available right now")
+
+    def test_long_name_refused_cleanly(self):
+        status, r = self.json("PUT", "/api/upload?kind=wiki&file=" + "a" * 300 + ".zim", b"x")
+        self.assertEqual(status, 400)
+        self.assertEqual(list((self.zims / ".incoming").iterdir()), [])
+
+    def test_check_bad_size_refused(self):
+        self.assertEqual(self.json("GET", "/api/check?kind=wiki&file=a.zim&size=lots")[0], 400)
+
+    def test_ollama_error_message_is_text(self):
+        import subprocess
+        from unittest import mock
+
+        done = subprocess.CompletedProcess([], 1, stdout="", stderr="pulling…\nError: invalid file magic\n")
+        with mock.patch("subprocess.run", return_value=done):
+            with self.assertRaises(RuntimeError) as cm:
+                server.Ollama(self.zims)._run("create", "x")
+        self.assertEqual(str(cm.exception), "Error: invalid file magic")
 
     def test_upload_without_length_refused(self):
         conn = urllib.request.urlopen  # noqa: F841 — raw socket keeps Content-Length out
@@ -128,7 +161,9 @@ class LiteApi(Api):
     models_enabled = False
 
     def test_status_shape(self):
-        self.assertIsNone(self.json("GET", "/api/status")[1]["models"])
+        s = self.json("GET", "/api/status")[1]
+        self.assertIsNone(s["models"])
+        self.assertIsNone(s["models_error"])
 
     def test_upload_model_roundtrip(self):
         status, r = self.json("PUT", "/api/upload?kind=model&file=m.gguf", b"gguf")

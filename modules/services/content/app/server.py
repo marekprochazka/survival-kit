@@ -32,6 +32,7 @@ from content import Refused
 STATIC = {"/": "index.html", "/content.js": "content.js", "/style.css": "style.css"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css"}
 NO_MODELS = "no AI models on this box (lite profile)"
+MODELS_DOWN = "not available right now"
 
 
 @dataclass
@@ -76,6 +77,8 @@ def render(template, s):
     )
     if s["models"] is not None:
         out.append(f'<section id="models"><h2>AI models</h2><p class="where">{e(s["locations"]["models"])}</p>')
+        if s["models_error"]:
+            out.append(f'<p class="error">AI models: {e(s["models_error"])} (is Ollama still starting?)</p>')
         out.append("<table><tr><th>Model</th><th>Size</th><th></th></tr>")
         for m in s["models"]:
             out.append(
@@ -93,16 +96,24 @@ def make_server(config, wiki, models, disk):
 
     def status():
         total, free = disk()
+        # Ollama may be starting, crashed or out of memory: the wiki part must still work
+        model_items, models_error = (None, None)
+        if models:
+            try:
+                model_items = models.items()
+            except Exception:  # noqa: BLE001
+                model_items, models_error = [], MODELS_DOWN
         return {
             "disk": {
                 "total": total,
                 "free": free,
                 "wiki": wiki.used(),
-                "models": models.used() if models else 0,
+                "models": sum(m["size"] for m in model_items or []),
             },
             "wiki": wiki.items(),
             "builtins": wiki.builtin_items(),
-            "models": models.items() if models else None,
+            "models": model_items,
+            "models_error": models_error,
             "locations": config.locations,
         }
 
@@ -156,17 +167,24 @@ def make_server(config, wiki, models, disk):
 
                 def check():
                     store, name, factor, _ = target(q)
+                    size = q.get("size", "0")
+                    if not size.isdigit():
+                        raise Refused("size must be a number of bytes")
                     total, free = disk()
-                    content.check_space(factor * int(q.get("size", "0")), free, total)
+                    content.check_space(factor * int(size), free, total)
                     self.send(200, {"name": name, "exists": store.exists(name)})
 
                 return self.route(check)
             if path in STATIC:
-                file = config.static_dir / STATIC[path]
-                body = file.read_bytes()
-                if path == "/":
-                    body = render(body.decode(), status()).encode()
-                return self.send(200, body, TYPES[file.suffix])
+
+                def page():
+                    file = config.static_dir / STATIC[path]
+                    body = file.read_bytes()
+                    if path == "/":
+                        body = render(body.decode(), status()).encode()
+                    self.send(200, body, TYPES[file.suffix])
+
+                return self.route(page)
             self.send(404, {"error": "not found"})
 
         def do_PUT(self):
@@ -240,7 +258,8 @@ class Ollama:
     def _run(self, *args):
         r = subprocess.run(["ollama", *args], capture_output=True, text=True)
         if r.returncode != 0:
-            raise RuntimeError((r.stderr or r.stdout).strip().splitlines()[-1:] or "ollama failed")
+            lines = (r.stderr or r.stdout).strip().splitlines()
+            raise RuntimeError(lines[-1] if lines else "ollama failed")
 
     def create(self, name, path):
         modelfile = self.workdir / f".Modelfile-{os.getpid()}-{time.monotonic_ns()}"

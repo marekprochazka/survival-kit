@@ -14,8 +14,9 @@ function say(text, isError) {
 
 async function api(method, url) {
   const r = await fetch(url, { method });
-  const body = await r.json();
-  if (!r.ok) throw new Error(body.error || r.statusText);
+  let body = {};
+  try { body = await r.json(); } catch (_) { /* e.g. nginx's own HTML error page */ }
+  if (!r.ok) throw new Error(body.error || `the box answered ${r.status} ${r.statusText}`.trim());
   return body;
 }
 
