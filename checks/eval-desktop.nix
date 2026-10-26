@@ -45,7 +45,7 @@ assert lib.assertMsg (
 ) "typing just 'deck' must open the dashboard";
 assert lib.assertMsg (
   !cfg.programs.firefox.policies.CaptivePortal && !cfg.programs.firefox.policies.NetworkPrediction
-) "no captive-portal probes or link prefetching (offline box)";
+) "captive-portal service and DNS prefetching off (offline box)";
 assert lib.assertMsg (lib.any (
   x: !x.assertion && lib.hasInfix "autoLoginUser" x.message
 ) noSuchUser.assertions) "an autologin user that doesn't exist must fail the build clearly";

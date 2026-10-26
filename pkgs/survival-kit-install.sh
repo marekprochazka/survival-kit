@@ -58,9 +58,10 @@ while read -r name type ro size; do
   [[ $name == loop* || $name == sr* || $name == zram* || $name == fd* || $name == ram* ]] && continue
   # read-only (e.g. eMMC boot areas mmcblk0boot0/1) or empty (card reader without a card)
   [[ $ro == 0 && $size != 0 ]] || continue
-  # skip disks with anything mounted — e.g. the USB stick we booted from
-  # (no pipe: a pipe could fail and wrongly count the disk as free)
-  [[ -z $(lsblk -nro MOUNTPOINTS "/dev/$name") ]] || continue
+  # skip disks with anything mounted — e.g. the USB stick we booted from.
+  # Fail closed: if lsblk can't tell us (error), the disk is skipped, not offered.
+  mounts=$(lsblk -nro MOUNTPOINTS "/dev/$name") || continue
+  [[ -z $mounts ]] || continue
   candidates+=("$name")
 done < <(lsblk -dnbro NAME,TYPE,RO,SIZE)
 if ((${#candidates[@]} == 0)); then

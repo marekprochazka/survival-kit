@@ -35,10 +35,10 @@ pkgs.testers.runNixOSTest {
 
     with subtest("apps and power settings are in place"):
         machine.succeed("command -v papers btop")
-        # xfce4-power-manager applies blank-on-ac = 10 min as the X screen saver timeout
-        machine.wait_until_succeeds(
-            "su - deck -c 'DISPLAY=:0 xset q' | grep -q 'timeout:  600'", timeout=60
-        )
+        # our power-manager defaults are in effect (xset can't tell: 600 s is also X's
+        # built-in default); xfconf-query fails if a property was never set
+        assert as_deck("xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-ac") == "10"
+        assert as_deck("xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-on-ac-off") == "15"
 
     with subtest("no screen locker installed"):
         machine.fail("test -e /run/current-system/sw/bin/xfce4-screensaver")

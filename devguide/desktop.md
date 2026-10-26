@@ -26,8 +26,8 @@ Nothing in this module writes to anyone's home directory.
 
 `programs.firefox.policies` (enterprise policies): homepage `http://deck` (not locked),
 telemetry/studies/Pocket/sponsored content off, no first-run pages, no default-browser
-prompt, no onboarding popups, no captive-portal probes or link prefetching
-(`CaptivePortal`, `NetworkPrediction`). Preferences:
+prompt, no onboarding popups, captive-portal service off (`CaptivePortal`), DNS prefetching off
+(`NetworkPrediction`). Preferences:
 
 - `browser.fixup.domainsuffixwhitelist.deck = true` — so typing `wiki.deck` opens the site
   instead of a web search.

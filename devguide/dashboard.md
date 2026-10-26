@@ -11,8 +11,8 @@
 - **Works without JavaScript** — tiles are plain links.
 - `status.js` adds the dots (`role="img"` with an `aria-label`, so screen readers announce
   the state; `aria-busy` while re-checking): every 15 s it fetches `/health/<name>` for each service tile
-  (same origin, so no CORS issues), 3 s timeout. 2xx/3xx → green, anything else → red,
-  grey while checking.
+  (same origin, so no CORS issues), 3 s timeout. 2xx/3xx → green, anything else → red;
+  grey only until the first result (re-checks keep the colour, no flicker).
 - `style.css`: system fonts, responsive grid, light/dark following the OS setting, no
   external files (offline).
 

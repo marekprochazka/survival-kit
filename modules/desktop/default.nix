@@ -94,8 +94,8 @@ in
           FeatureRecommendations = false;
           MoreFromMozilla = false;
         };
-        CaptivePortal = false; # no "is there a login portal?" probes to the internet
-        NetworkPrediction = false; # no DNS/link prefetching
+        CaptivePortal = false; # turns off Firefox's captive-portal service
+        NetworkPrediction = false; # turns off DNS prefetching (not all prefetching)
       };
       preferences = {
         # without this, typing "wiki.deck" in the address bar runs a web search
