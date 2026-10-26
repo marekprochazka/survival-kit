@@ -238,6 +238,8 @@ pkgs.testers.runNixOSTest {
         assert any("/content/dropin-test/" in s["url"] for s in msgs[-1]["sources"]), msgs
         machine.wait_until_succeeds(CH + f"/chats/{other} | grep -q 'this is a test page'", timeout=120)
         assert "https://chat.deck/" in machine.succeed("${curl} -sf https://deck/")  # the tile
+        for js in ["marked.js", "purify.js", "chat.js"]:  # vendored Markdown + cleaning
+            machine.succeed("${curl} -sf -o /dev/null https://chat.deck/" + js)
 
     with subtest("plain http redirects to https"):
         for url in ["http://wiki.deck/", "http://deck/", "http://127.0.0.1/"]:

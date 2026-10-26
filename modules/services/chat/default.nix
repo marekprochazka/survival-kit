@@ -11,10 +11,25 @@
 let
   cfg = config.survivalKit.services.chat;
   port = 8320;
+  # Markdown → HTML (marked) → cleaned (DOMPurify): vendored, pinned by hash, readable
+  # (unminified) builds; their licences ship next to them (THIRD-PARTY.md)
+  marked = pkgs.fetchurl {
+    url = "https://registry.npmjs.org/marked/-/marked-18.1.2.tgz";
+    hash = "sha256-nj4PW+ucFaZxAl61iMZNyAeKUpEh0d6An4dSvEIq0J0=";
+  };
+  dompurify = pkgs.fetchurl {
+    url = "https://registry.npmjs.org/dompurify/-/dompurify-3.4.17.tgz";
+    hash = "sha256-BWy9ridolyCLiMIdHXea36Ca175Iii9RCijpANO7/+c=";
+  };
   static = pkgs.runCommand "chat-static" { } ''
-    mkdir $out
+    mkdir -p $out/licenses
     cp ${./app/static}/* $out/
     cp ${../../dashboard/style.css} $out/style.css
+    tar xzf ${marked} --strip-components=2 -C $out package/lib/marked.umd.js
+    mv $out/marked.umd.js $out/marked.js
+    tar xzf ${marked} -O package/LICENSE > $out/licenses/marked-LICENSE
+    tar xzf ${dompurify} --strip-components=2 -C $out package/dist/purify.js
+    tar xzf ${dompurify} -O package/LICENSE > $out/licenses/dompurify-LICENSE
   '';
 in
 {

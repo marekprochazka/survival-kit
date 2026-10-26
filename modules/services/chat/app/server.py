@@ -33,7 +33,13 @@ from pathlib import Path
 import store as store_mod
 import worker as worker_mod
 
-STATIC = {"/": "index.html", "/chat.js": "chat.js", "/style.css": "style.css"}
+STATIC = {
+    "/": "index.html",
+    "/chat.js": "chat.js",
+    "/style.css": "style.css",
+    "/marked.js": "marked.js",  # vendored (see default.nix, THIRD-PARTY.md)
+    "/purify.js": "purify.js",
+}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css"}
 NO_MODELS = "No AI model on this box yet — add one under Content."
 FINAL = ("done", "failed", "cancelled")

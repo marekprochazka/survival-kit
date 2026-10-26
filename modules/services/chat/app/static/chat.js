@@ -1,5 +1,7 @@
 // Chat page: the chat list, the conversation, and following an answer as it is written.
-// Model text is only ever inserted as text (textContent) — never as HTML.
+// The model's Markdown is rendered with marked and then cleaned with DOMPurify before it
+// becomes HTML (no scripts, images, forms, styles); only links into this box stay clickable.
+// Everything else (questions, titles, status) is inserted as text (textContent).
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -59,6 +61,32 @@ async function loadChats() {
   }
 }
 
+// the box's own domain ("deck" from "chat.deck") — links there work offline, others don't
+const BOX = location.hostname.replace(/^[^.]+\./, "");
+
+function renderMarkdown(container, text) {
+  const html = marked.parse(text, { gfm: true, breaks: true });
+  container.innerHTML = DOMPurify.sanitize(html, {
+    FORBID_TAGS: ["img", "style", "form", "input", "button", "iframe", "video", "audio", "svg", "math"],
+    FORBID_ATTR: ["style"],
+  });
+  for (const a of container.querySelectorAll("a")) {
+    const href = a.getAttribute("href") || "";
+    let local = false;
+    try {
+      const u = new URL(href, location.href);
+      local = /^https?:$/.test(u.protocol) && (u.hostname === BOX || u.hostname.endsWith("." + BOX));
+    } catch (_) { /* not a URL */ }
+    if (local) {
+      a.target = "_blank";
+      a.rel = "noopener";
+    } else { // off-box (made up, or unreachable offline): show it, don't link it
+      const span = el("span", "offline-link", href && href !== a.textContent ? `${a.textContent} (${href})` : a.textContent);
+      a.replaceWith(span);
+    }
+  }
+}
+
 function sourcesBlock(sources) {
   const div = el("div", "sources", "Sources: ");
   for (const s of sources) {
@@ -72,7 +100,9 @@ function sourcesBlock(sources) {
 }
 
 function showMessage(m) {
-  const div = el("div", `msg ${m.role}${m.notice ? " notice" : ""}`, m.content);
+  const div = el("div", `msg ${m.role}${m.notice ? " notice" : ""}`);
+  if (m.role === "assistant") renderMarkdown(div, m.content);
+  else div.textContent = m.content; // your own question: plain text
   if (m.sources && m.sources.length) div.appendChild(sourcesBlock(m.sources));
   $("messages").appendChild(div);
   return div;
@@ -114,7 +144,7 @@ function followJob(jobId) {
   let text = "";
   const src = new EventSource(`/api/jobs/${jobId}/events`);
   follow = src;
-  const show = () => { answer.textContent = text; box.scrollTop = box.scrollHeight; };
+  const show = () => { renderMarkdown(answer, text); box.scrollTop = box.scrollHeight; };
   const waiting = (n) => {
     status.textContent = `Waiting — another answer is being written${n > 1 ? ` (${n - 1} more ahead)` : ""}.`;
     cancel.hidden = false;

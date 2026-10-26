@@ -43,6 +43,17 @@ marked "interrupted — ask again"; `queued` ones go on.
 `GET /api/jobs/<id>/events`. Writes take JSON bodies only (a form on another site can't send
 them). nginx: `proxy_buffering off` so tokens arrive live.
 
+## Rendering
+
+Answers are Markdown. The page renders them with **marked** (Markdown → HTML, incl. tables
+and code blocks) and then **DOMPurify** cleans that HTML before it enters the page — no
+scripts, event handlers, images, forms or `style`. Then our own rule: only links into the
+box (`*.deck`) stay clickable; any other link (made up, or unreachable offline) becomes
+plain text with its address shown. Questions, titles and status lines stay plain text.
+Both libraries are vendored: pinned npm tarballs fetched by Nix (`fetchurl` + hash) in
+`default.nix`, unminified builds, licences shipped next to them — see `THIRD-PARTY.md`.
+The answer is re-rendered on every streamed piece (cheap at these sizes).
+
 ## Tuning
 
 Budgets and prompts are constants at the top of `worker.py` and `lookup.py`. Small models
