@@ -17,6 +17,8 @@ The repository (on an installed box: `/etc/nixos`):
 | `modules/services/vaultwarden/` | Passwords: the Vaultwarden service |
 | `modules/services/ollama/` | Local AI (full profile): the Ollama service + CLI |
 | `modules/profiles/` | lite/full: which services a box gets |
+| `modules/services/lookup/` | Wiki lookup: book map → search → read; HTTP for the chat + MCP command |
+| `modules/services/chat/` | Wiki-first chat: SQLite, one-at-a-time worker, live events, page |
 | `modules/services/content/` | The content manager: import/delete wiki books and AI models (Python + page) |
 | `modules/services/kiwix/` | The offline wiki: service, catalog rebuild, bundled books |
 | `modules/dashboard/` | The dashboard page generator, its CSS and status script |

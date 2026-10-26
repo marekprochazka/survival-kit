@@ -24,11 +24,13 @@ Working prototype, tested in QEMU and VirtualBox (not yet on real hardware).
 - Offline wiki (Kiwix) at `https://wiki.deck` with the Arch Wiki, man pages, Nix/bash/git
   docs and a built-in user manual.
 - Password manager (Vaultwarden) at `https://vault.deck`.
-- `full` only: local AI models (Ollama, CPU) in the terminal; models come from a USB stick.
+- `full` only: a wiki-first chat at `https://chat.deck` (local AI via Ollama, CPU) that
+  answers from the wiki with sources; models come from a USB stick. The wiki lookup also
+  speaks MCP (`survival-kit-wiki-mcp`).
 - Content manager at `https://content.deck`: import wiki books and AI models from a stick,
   see disk use, delete.
 
-Not yet: more services (file sync, offline maps, notes, media, …), a chat page for the AI, Wi-Fi hotspot mode, updates.
+Not yet: more services (file sync, offline maps, notes, media, …), a terminal AI assistant, Wi-Fi hotspot mode, updates.
 
 ## Try it
 

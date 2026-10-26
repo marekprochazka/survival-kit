@@ -18,8 +18,8 @@
   (The future importer — ADR-0004 — will automate this.)
 - The `ollama` CLI is installed system-wide by the nixpkgs module and talks to `127.0.0.1:11434` by default:
   `ollama run/list/rm` work for `deck`.
-- **Not in the registry:** Ollama has no web page, so no vhost, dashboard tile or
-  certificate name. The browser chat (a later round) brings its tile.
+- **Not in the registry:** Ollama has no web page of its own; the [Chat](chat.html) is its
+  browser front end.
 - Package: the CPU build, ~150 MB. Small models (3B, Q4, ~2 GB) answer at a few words per
   second on an i5; 7B models crawl.
 - Logs: `journalctl -u ollama`. API check: `curl http://127.0.0.1:11434/api/version`.

@@ -10,7 +10,8 @@ desktop itself logs in automatically.
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
 - [Content](content.html) — bring in wiki books and AI models from a stick
 - [Passwords](passwords.html) — the offline password manager
-- [AI models](ai-models.html) — local AI in the terminal (full profile)
+- [Chat](chat.html) — ask the local AI; it looks in the wiki first (full profile)
+- [AI models](ai-models.html) — the models behind the chat (full profile)
 - [Adding content](adding-content.html) — more wikis and documents
 - [Rebuilding](rebuilding.html) — changing the system safely
 - [Troubleshooting](troubleshooting.html) — when something doesn't work

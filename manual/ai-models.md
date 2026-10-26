@@ -2,8 +2,9 @@
 
 *Only on boxes installed with the **full** profile.*
 
-The box can run small AI language models — offline, on this machine's own processor. You
-talk to them in the terminal. (A chat page in the browser comes later.)
+The box can run small AI language models — offline, on this machine's own processor. The
+easy way to use them is the [Chat](chat.html) page, which also looks things up in the wiki;
+the terminal way (`ollama run`) is below.
 
 **What the machine needs:** at least **8 GB of RAM** and an i5-class processor (or
 better). Small models answer at a few words per second; large ones (7B and up) crawl.

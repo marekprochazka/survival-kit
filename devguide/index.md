@@ -34,7 +34,7 @@ registered services; a small script checks each service through `https://deck/he
 2. [Flake](flake.html) — how the two systems are assembled.
 3. One page per area: [Base](base.html), [Services](services.html) (incl. **adding a
    service**), [Profiles](profiles.html), [HTTPS](tls.html), [Kiwix](kiwix.html),
-   [Vaultwarden](vaultwarden.html), [Ollama](ollama.html), [Content manager](content.html), [Dashboard](dashboard.html), [Desktop](desktop.html),
+   [Vaultwarden](vaultwarden.html), [Ollama](ollama.html), [Content manager](content.html), [Wiki lookup](lookup.html), [Chat](chat.html), [Dashboard](dashboard.html), [Desktop](desktop.html),
    [First boot](firstboot.html), [Installer & ISO](installer.html).
 4. [Testing](testing.html) and [Workflows](workflows.html) — changing things safely.
 5. [Decisions & reference](decisions.html) — *why* it is built this way.
