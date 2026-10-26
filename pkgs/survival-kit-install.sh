@@ -1,5 +1,5 @@
 # survival-kit-install — put survival-kit onto this machine's disk. No network needed.
-# Steps: choose disk → encryption → confirm → prepare config → partition (disko)
+# Steps: choose disk → encryption + profile → confirm → prepare config → partition (disko)
 #        → install (nixos-install) → hand the config over to /etc/nixos (git repo).
 
 usage() {
@@ -93,7 +93,7 @@ if [[ -z $device ]]; then
   echo "Note: no stable /dev/disk/by-id name for $disk; using $device."
 fi
 
-announce 2 "Encryption"
+announce 2 "Encryption and profile"
 read -rp "Encrypt the disk? A passphrase is then needed at every boot. [y/N] " answer
 encrypt=false
 if [[ $answer == [yY]* ]]; then
@@ -103,9 +103,22 @@ if [[ $answer == [yY]* ]]; then
   echo "You will be asked for the passphrase (twice) during step 5."
 fi
 
+# fixed for the life of the install (changing it = reinstall); no hardware check —
+# the owner decides
+echo
+echo "Profile:"
+echo "  lite — wiki, passwords; for low RAM or a slow CPU"
+echo "  full — adds local AI; needs at least 8 GB RAM"
+while true; do
+  read -rp "Profile (lite or full): " profile
+  [[ $profile == lite || $profile == full ]] && break
+  echo "Please type exactly: lite or full"
+done
+
 announce 3 "Confirm"
 info=$(lsblk -dno SIZE,MODEL "/dev/$disk" | tr -s ' ') # squeeze spaces (xargs chokes on quotes)
 info=${info# }
+echo "Profile: $profile, encrypted: $encrypt"
 echo "ALL DATA ON /dev/$disk ($info) WILL BE ERASED."
 read -rp "Type the disk name ($disk) to continue: " confirm
 [[ $confirm == "$disk" ]] || {
@@ -121,13 +134,15 @@ cp -r --no-preserve=ownership "$FLAKE_SRC"/. "$work"/
 chmod -R u+w "$work"
 host="$work/hosts/survival-kit"
 cat >"$host/selection.nix" <<EOF
-# Written by survival-kit-install on $(date -I). Edit + rebuild to change
-# (a changed configuration needs network to rebuild; see the manual).
+# Written by survival-kit-install on $(date -I). The profile is fixed — to change
+# it, reinstall from the ISO. (Any changed configuration needs network to rebuild;
+# see the manual.)
 {
   survivalKit.disk = {
     device = "$device";
     encrypt = $encrypt;
   };
+  survivalKit.profile = "$profile";
 }
 EOF
 {
@@ -159,7 +174,7 @@ git -C /mnt/etc/nixos config user.name "survival-kit owner"
 git -C /mnt/etc/nixos config user.email "owner@survival-kit.local"
 git -C /mnt/etc/nixos add -A
 git -C /mnt/etc/nixos -c user.name="survival-kit installer" -c user.email="installer@survival-kit.local" \
-  commit -qm "installed by survival-kit-install on $(date -I) (disk $disk, encrypted: $encrypt)"
+  commit -qm "installed by survival-kit-install on $(date -I) (disk $disk, encrypted: $encrypt, profile $profile)"
 
 trap - ERR
 cat <<EOF

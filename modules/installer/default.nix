@@ -13,20 +13,32 @@ let
   target = self.nixosConfigurations.survival-kit;
   # Every install targets a machine-specific /dev/disk/by-id/… name, so the few
   # device-dependent derivations (system, GRUB install script, disko script) are
-  # always rebuilt on the target. Prebuild one variant per encryption setting and
-  # carry those derivations' build inputs (inputDerivation) → offline, any disk
-  # name needs only a handful of tiny builds and no downloads.
-  variants =
-    map
-      (encrypt: {
-        device = "/dev/sda"; # representative; the real one is the by-id name
-        inherit encrypt;
-      })
-      [
-        false
-        true
+  # always rebuilt on the target. Prebuild one variant per profile × encryption
+  # setting and carry those derivations' build inputs (inputDerivation) → offline,
+  # any disk name needs only a handful of tiny builds and no downloads.
+  variants = lib.cartesianProduct {
+    encrypt = [
+      false
+      true
+    ];
+    profile = [
+      "lite"
+      "full"
+    ];
+  };
+  variantConfig =
+    { encrypt, profile }:
+    (target.extendModules {
+      modules = [
+        {
+          survivalKit.disk = {
+            device = "/dev/sda"; # representative; the real one is the by-id name
+            inherit encrypt;
+          };
+          survivalKit.profile = profile;
+        }
       ];
-  variantConfig = disk: (target.extendModules { modules = [ { survivalKit.disk = disk; } ]; }).config;
+    }).config;
 in
 {
   options.survivalKit.installer.enable = lib.mkEnableOption "the survival-kit-install command and its offline dependencies";
@@ -39,9 +51,9 @@ in
       })
     ];
     system.extraDependencies = lib.concatMap (
-      disk:
+      v:
       let
-        c = variantConfig disk;
+        c = variantConfig v;
       in
       [
         c.system.build.toplevel

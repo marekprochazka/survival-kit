@@ -31,7 +31,7 @@ let
   installerDeps = map toString installerSys.config.system.extraDependencies;
   # build outputs of a prebuilt variant (representative device, see modules/installer)
   variantBuild =
-    encrypt:
+    { encrypt, profile }:
     (base.extendModules {
       modules = [
         {
@@ -39,6 +39,7 @@ let
             device = "/dev/sda";
             inherit encrypt;
           };
+          survivalKit.profile = profile;
         }
       ];
     }).config.system.build;
@@ -54,23 +55,36 @@ assert lib.assertMsg (lib.all (i: lib.elem (toString i) deps) [
   self.inputs.nixpkgs
   self.inputs.disko
 ]) "flake input sources must be on the system so /etc/nixos rebuilds offline";
-assert lib.assertMsg (lib.all
-  (
-    encrypt:
-    let
-      b = variantBuild encrypt;
-    in
-    lib.all (d: lib.elem (toString d) installerDeps) [
-      b.toplevel
-      b.destroyFormatMount
-      b.toplevel.inputDerivation # build inputs → any disk name installs offline
-    ]
+assert lib.assertMsg
+  (lib.all
+    (
+      v:
+      let
+        b = variantBuild v;
+      in
+      lib.all (d: lib.elem (toString d) installerDeps) [
+        b.toplevel
+        b.destroyFormatMount
+        b.toplevel.inputDerivation # build inputs → any disk name installs offline
+      ]
+    )
+    (
+      lib.cartesianProduct {
+        encrypt = [
+          false
+          true
+        ];
+        profile = [
+          "lite"
+          "full"
+        ];
+      }
+    )
   )
-  [
-    false
-    true
-  ]
-) "installer must carry prebuilt systems + their build inputs for offline installs";
+  "installer must carry prebuilt systems (profile × encryption) + build inputs for offline installs";
+assert lib.assertMsg (lib.hasInfix ''survivalKit.profile = "$profile";'' (
+  builtins.readFile ../pkgs/survival-kit-install.sh
+)) "the installer must write the chosen profile into selection.nix";
 assert lib.assertMsg (lib.hasInfix "/etc/nixos" (
   builtins.toJSON cfg.programs.git.config
 )) "git must trust the root-owned /etc/nixos repo (safe.directory) so users can read it";
