@@ -149,6 +149,13 @@ pkgs.testers.runNixOSTest {
         machine.succeed("test -s /var/backup/vaultwarden/daily/$(date +%F)/db.sqlite3")
         assert machine.succeed("ls /var/backup/vaultwarden/daily | wc -l").strip() == "1"
 
+    with subtest("Ollama (local AI)"):
+        machine.wait_for_unit("ollama.service")
+        machine.wait_for_open_port(11434)
+        machine.succeed("curl -sf http://127.0.0.1:11434/api/version | grep -q version")
+        # the CLI as the owner, against the system service; no model yet → empty list
+        machine.succeed("su - deck -c 'ollama list'")
+
     with subtest("plain http redirects to https"):
         for url in ["http://wiki.deck/", "http://deck/", "http://127.0.0.1/"]:
             res = machine.succeed(f"curl -s -o /dev/null -w '%{{http_code}} %{{redirect_url}}' {url}")

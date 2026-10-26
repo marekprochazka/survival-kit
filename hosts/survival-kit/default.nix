@@ -21,6 +21,7 @@
     services = {
       kiwix.enable = true;
       vaultwarden.enable = true;
+      ollama.enable = true;
     };
     desktop = {
       enable = true;

@@ -5,5 +5,6 @@
     ./web.nix
     ./kiwix
     ./vaultwarden
+    ./ollama
   ];
 }

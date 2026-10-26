@@ -21,6 +21,7 @@ let
     panel-drift = import ./panel-drift.nix args;
     eval-tls = import ./eval-tls.nix args;
     eval-vaultwarden = import ./eval-vaultwarden.nix args;
+    eval-ollama = import ./eval-ollama.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
