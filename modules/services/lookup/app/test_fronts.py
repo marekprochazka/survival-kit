@@ -114,6 +114,16 @@ class Mcp(unittest.TestCase):
                 self.assertTrue(r["result"]["isError"])
         self.assertEqual(self.lookup.read_paths, [])
 
+    def test_mcp_kiwix_garbage_is_a_tool_error(self):
+        import xml.etree.ElementTree as ET
+
+        def broken(*a, **k):
+            raise ET.ParseError("not XML")
+
+        self.lookup.search = broken
+        r = self.rpc("tools/call", {"name": "wiki_search", "arguments": {"words": "burn"}})
+        self.assertTrue(r["result"]["isError"])
+
     def test_mcp_unknown_method(self):
         self.assertEqual(self.rpc("resources/list")["error"]["code"], -32601)
 

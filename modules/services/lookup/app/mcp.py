@@ -101,7 +101,7 @@ class McpServer:
             try:
                 text = self.call_tool(params.get("name"), params.get("arguments") or {})
                 return ok({"content": [{"type": "text", "text": text}], "isError": False})
-            except (ValueError, OSError) as e:
+            except Exception as e:  # noqa: BLE001 — a tool failure must not end the server
                 return ok({"content": [{"type": "text", "text": str(e)}], "isError": True})
         return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"unknown method: {method}"}}
 

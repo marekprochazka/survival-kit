@@ -37,6 +37,12 @@ STATIC = {"/": "index.html", "/chat.js": "chat.js", "/style.css": "style.css"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css"}
 NO_MODELS = "No AI model on this box yet — add one under Content."
 FINAL = ("done", "failed", "cancelled")
+MAX_BODY = 64 * 1024  # a question is text; nothing legitimate is bigger
+
+
+def utf16_len(text):
+    """Length as the browser's JavaScript counts it (an emoji is 2) — token `end` positions."""
+    return len(text.encode("utf-16-le")) // 2
 
 
 @dataclass
@@ -70,7 +76,7 @@ class Hub:
     def publish(self, job_id, kind, data):
         if kind == "token":
             job = self.store.job(job_id)
-            data = {"text": data, "end": len(job["text"]) if job else len(data)}
+            data = {"text": data, "end": utf16_len(job["text"] if job else data)}
         elif kind == "status":
             data = {"text": data}
         elif kind == "error":
@@ -104,6 +110,8 @@ def make_server(config, store, worker, hub, models):
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
                 return "415"
             length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_BODY:
+                return "413"
             try:
                 data = json.loads(self.rfile.read(length) or b"{}")
             except ValueError:
@@ -136,7 +144,8 @@ def make_server(config, store, worker, hub, models):
                 chat = store.chat(ident)
                 if chat is None:
                     return self.send(404, {"error": "no such chat"})
-                return self.send(200, {"chat": chat, "messages": store.messages(ident), "job": store.open_job(ident)})
+                job = store.open_job(ident) or store.last_failed_job(ident)  # a failure stays visible
+                return self.send(200, {"chat": chat, "messages": store.messages(ident), "job": job})
             if kind == "jobs" and sub == "/events":
                 return self.events(ident)
             self.send(404, {"error": "not found"})
@@ -195,6 +204,9 @@ def make_server(config, store, worker, hub, models):
             data = self.json_body()
             if data == "415":
                 return self.send(415, {"error": "send JSON"})
+            if data == "413":
+                self.close_connection = True  # the unread body follows
+                return self.send(413, {"error": "too long"})
             if data is None:
                 return self.send(400, {"error": "expected a JSON object"})
             return handler(data)

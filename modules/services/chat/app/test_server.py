@@ -14,6 +14,10 @@ import store
 import worker
 from test_chat import ARTICLE
 
+def utf16(s):
+    return len(s.encode("utf-16-le")) // 2  # what JavaScript's .length counts
+
+
 FOUND = {"plan": {"books": ["med"], "words": "burn"}, "hits": [{}], "articles": [ARTICLE], "error": None}
 
 
@@ -84,6 +88,18 @@ class Api(unittest.TestCase):
                         break
         return got
 
+    def follow(self, job):
+        """Read a job's events in the background; returns (thread, list) once subscribed."""
+        got = []
+        before = len(self.hub.subs.get(job, []))  # an earlier connection may still be counted
+        t = threading.Thread(target=lambda: got.extend(self.events(job)), daemon=True)
+        t.start()
+        for _ in range(200):
+            if len(self.hub.subs.get(job, [])) > before:
+                break
+            threading.Event().wait(0.01)
+        return t, got
+
     def new_chat(self):
         return self.call("POST", "/api/chats", {"model": "llama"})[1]["id"]
 
@@ -100,14 +116,16 @@ class Api(unittest.TestCase):
         chat = self.new_chat()
         status, r = self.call("POST", f"/api/chats/{chat}/ask", {"question": "burn?", "model": "llama"})
         self.assertEqual(status, 200)
+        self.assertTrue(self.gate.started.wait(5))
+        t, evs = self.follow(r["job"])  # subscribed before the answer goes on
         self.gate.release.set()
-        evs = self.events(r["job"])
+        t.join(10)
         kinds = [k for k, _ in evs]
         self.assertEqual(kinds[0], "replay")
-        self.assertIn("status", kinds)
+        self.assertTrue(evs[0][1]["status"])  # the status lines so far come with the replay
         self.assertEqual(kinds[-1], "done")
         text = "".join(d["text"] for k, d in evs if k == "token")
-        self.assertEqual(text, "Cool it under cool, running water.")
+        self.assertTrue("Cool it under cool, running water.".endswith(text))  # the rest after subscribing
         messages = self.call("GET", f"/api/chats/{chat}")[1]["messages"]
         self.assertEqual(messages[-1]["sources"][0]["url"], ARTICLE["url"])
 
@@ -118,16 +136,19 @@ class Api(unittest.TestCase):
         first = self.events(job, until=("replay",))  # the page reloads mid-answer…
         self.assertEqual(first[0][1]["text"], "Cool it under cool, ")
         self.assertEqual(first[0][1]["state"], "running")
+        t, evs = self.follow(job)  # …and reconnects, still mid-answer
         self.gate.release.set()
-        evs = self.events(job)  # …and reconnects
+        t.join(10)
         replay = evs[0][1]
+        self.assertEqual(replay["state"], "running")
         tokens = [d for k, d in evs if k == "token"]
         rebuilt = replay["text"]
-        for t in tokens:  # what the page does: skip text it already has
-            start = t["end"] - len(t["text"])
-            if t["end"] > len(rebuilt):
-                rebuilt += t["text"][len(rebuilt) - start:]
-        self.assertTrue(rebuilt.endswith("running water.") or replay["state"] == "done")
+        for tok in tokens:  # what the page does (in UTF-16 units, like JavaScript): skip what it has
+            have, end = utf16(rebuilt), tok["end"]
+            start = end - utf16(tok["text"])
+            if end > have:
+                rebuilt += tok["text"][have - start:]
+        self.assertEqual(rebuilt, "Cool it under cool, running water.")
 
     def test_second_question_reports_queue(self):
         a = self.call("POST", f"/api/chats/{self.new_chat()}/ask", {"question": "one", "model": "llama"})[1]["job"]
@@ -150,6 +171,26 @@ class Api(unittest.TestCase):
         self.assertEqual(self.store.job(job)["state"], "done")
         replay = self.events(job, until=("replay",))[0][1]
         self.assertEqual((replay["state"], replay["text"]), ("done", "Cool it under cool, running water."))
+
+    def test_token_end_counts_utf16(self):
+        chat = self.new_chat()
+        job = self.store.ask(chat, "q", "llama")
+        self.store.append_text(job, "Hi 😀")
+        q = self.hub.subscribe(job)
+        self.hub.publish(job, "token", "Hi 😀")
+        self.assertEqual(q.get(timeout=1)[1]["end"], 5)  # 😀 is two UTF-16 units in the browser
+
+    def test_failed_job_shown_after_reload(self):
+        chat = self.new_chat()
+        job = self.store.ask(chat, "q", "llama")
+        self.store.fail(job, "interrupted — ask again")
+        r = self.call("GET", f"/api/chats/{chat}")[1]
+        self.assertEqual((r["job"]["state"], r["job"]["error"]), ("failed", "interrupted — ask again"))
+
+    def test_request_too_large_413(self):
+        chat = self.new_chat()
+        big = json.dumps({"question": "x" * 200_000, "model": "llama"}).encode()
+        self.assertEqual(self.call("POST", f"/api/chats/{chat}/ask", big)[0], 413)
 
     def test_writes_need_json(self):
         self.assertEqual(self.call("POST", "/api/chats", b"model=llama", ctype="text/plain")[0], 415)

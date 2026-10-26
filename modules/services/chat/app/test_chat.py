@@ -98,6 +98,43 @@ class StoreTest(unittest.TestCase):
         self.assertEqual((s.job(a)["state"], s.job(a)["error"]), ("failed", "interrupted — ask again"))
         self.assertEqual(s.job(b)["state"], "queued")
 
+    def test_concurrent_reads_are_consistent(self):
+        s = make_store()
+        chat = s.create_chat("m")
+        job = s.ask(chat, "q", "m")
+        s.next_job()
+        errors, stop = [], threading.Event()
+
+        def read():
+            while not stop.is_set():
+                try:
+                    if s.job(job) is None:
+                        errors.append("job vanished")
+                    for m in s.messages(chat):
+                        m["sources"]
+                    s.chats()
+                except Exception as e:  # noqa: BLE001
+                    errors.append(repr(e))
+
+        readers = [threading.Thread(target=read) for _ in range(4)]
+        for t in readers:
+            t.start()
+        for i in range(3000):
+            s.append_text(job, "x")
+        stop.set()
+        for t in readers:
+            t.join()
+        self.assertEqual(errors[:3], [])
+
+    def test_ids_never_reused(self):
+        s = make_store()
+        chat = s.create_chat("m")
+        job = s.ask(chat, "q", "m")
+        s.delete(chat)
+        chat2 = s.create_chat("m")
+        self.assertNotEqual(chat2, chat)
+        self.assertNotEqual(s.ask(chat2, "q2", "m"), job)
+
     def test_text_saved_while_streaming(self):
         s = make_store()
         a = s.ask(s.create_chat("m"), "q", "m")
@@ -195,6 +232,52 @@ class WorkerTest(unittest.TestCase):
         self.assertLessEqual(sum(len(m["content"]) for m in history), worker.HISTORY_CHARS)
         self.assertLessEqual(len(msgs[-1]["content"]), worker.QUESTION_CHARS)
         self.assertEqual(msgs[-2]["content"], "answer 9")  # the most recent context is kept
+
+    def test_deleted_chat_stops_its_answer(self):
+        r = Rig()
+        chat, job = r.ask()
+        chunks = []
+
+        def model(model, messages):
+            yield "Cool it under the tap, "
+            r.store.delete(chat)  # someone deletes the chat mid-answer
+            for _ in range(50):
+                chunks.append(1)
+                yield "more "
+
+        r.worker.model_stream = model
+        chat2 = r.store.create_chat("m")
+        job2 = r.store.ask(chat2, "other question", "m")
+        self.assertTrue(r.worker.run_one())
+        self.assertLess(len(chunks), 3)  # stopped right away, not after the whole answer
+        self.assertIsNone(r.store.job(job))
+        self.assertEqual(r.store.job(job2)["state"], "queued")
+        self.assertEqual([m["role"] for m in r.store.messages(chat2)], ["user"])
+
+    def test_followup_history_while_pending(self):
+        r = Rig()
+        chat = r.store.create_chat("m")
+        r.store.ask(chat, "Q1", "m")
+        r.store.ask(chat, "Q2", "m")  # asked before the first answer exists
+        r.worker.run_one()
+        self.assertEqual([m["content"] for m in r.model.calls[0][1:]], ["Q1"])  # no duplicate, no Q2
+        r.worker.run_one()
+        second = [m["content"] for m in r.model.calls[1][1:]]
+        self.assertEqual(second, ["Q1", "Cool it under water [Burn].", "Q2"])
+
+    def test_lookup_gets_trimmed_question(self):
+        r = Rig()
+        r.ask("z " * 20000)
+        r.worker.run_one()
+        self.assertLessEqual(len(r.lookups[0][0]), worker.QUESTION_CHARS)
+
+    def test_wrapped_marker(self):
+        for reply in ["**NOT_IN_WIKI**", "`NOT_IN_WIKI`", '"NOT_IN_WIKI"']:
+            with self.subTest(reply=reply):
+                r = Rig(model=FakeModel(answer=reply))
+                chat, _ = r.ask()
+                r.worker.run_one()
+                self.assertTrue(r.store.messages(chat)[-1]["notice"])
 
     def test_loop_runs_until_stopped(self):
         r = Rig()

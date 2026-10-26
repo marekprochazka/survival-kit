@@ -25,6 +25,15 @@ If the articles do not answer the question, reply with exactly {marker} and noth
 FALLBACK_SYSTEM = """You are the assistant of an offline computer. Its offline wiki has nothing on this question, so answer from your own knowledge, briefly and carefully. Say so when you are unsure."""
 
 
+class _Gone(Exception):
+    """The job was deleted (its chat was) while being answered."""
+
+
+def _starts_with_marker(text):
+    # small models like to wrap it: **NOT_IN_WIKI**, `NOT_IN_WIKI`, "NOT_IN_WIKI"
+    return text.lstrip(" \t\r\n*`\"'").startswith(MARKER)
+
+
 def _cut(text, limit):
     """At most `limit` characters, cut on a word boundary (the "…" counts)."""
     if len(text) <= limit:
@@ -73,6 +82,8 @@ class Worker:
             return False
         try:
             self._answer(job)
+        except _Gone:
+            pass  # deleted mid-answer: stop, free the CPU for the next question
         except Exception as e:  # noqa: BLE001 — one failed answer must not stop the queue
             message = f"the answer failed: {e}"
             self.store.fail(job["id"], message)
@@ -80,10 +91,14 @@ class Worker:
         return True
 
     def _status(self, job_id, text):
+        if self.store.job(job_id) is None:
+            raise _Gone
         self.store.set_status(job_id, text)
         self.on_event(job_id, "status", text)
 
     def _emit(self, job_id, text):
+        if self.store.job(job_id) is None:
+            raise _Gone
         self.store.append_text(job_id, text)
         self.on_event(job_id, "token", text)
 
@@ -96,13 +111,13 @@ class Worker:
                 self._emit(job_id, chunk)
                 continue
             held += chunk
-            if held.lstrip().startswith(MARKER):
+            if _starts_with_marker(held):
                 return None  # the articles don't answer it; stop reading
             if len(held.lstrip()) >= HOLD:
                 released = True
                 self._emit(job_id, held)
         if not released:
-            if held.lstrip().startswith(MARKER):
+            if _starts_with_marker(held):
                 return None
             if held:
                 self._emit(job_id, held)
@@ -112,12 +127,18 @@ class Worker:
         jid, model = job["id"], job["model"]
         if model not in self.models():
             raise RuntimeError(f"the model {model} is not on this box anymore (see Content)")
-        history = trim_history(self.store.messages(job["chat"])[:-1])  # without this question
-        question = {"role": "user", "content": _cut(job["question"], QUESTION_CHARS)}
+        # the conversation as context — without this question and without questions asked
+        # after it (they may already be waiting); answers to earlier questions stay in
+        qid = job["question_msg"]
+        history = trim_history(
+            [m for m in self.store.messages(job["chat"]) if m["id"] != qid and not (m["role"] == "user" and m["id"] > qid)]
+        )
+        asked = _cut(job["question"], QUESTION_CHARS)
+        question = {"role": "user", "content": asked}
 
         self._status(jid, "Looking at the book map")
         try:
-            found = self.lookup_call(job["question"], model, history)
+            found = self.lookup_call(asked, model, history)
         except Exception:  # noqa: BLE001 — no wiki → the model's own knowledge, with the notice
             found = {"plan": None, "articles": [], "error": "the wiki lookup is not available"}
         articles = found.get("articles") or []
@@ -146,5 +167,6 @@ class Worker:
                 raise RuntimeError("the model returned an empty answer")
             answer, sources, notice = NOTICE + "\n\n" + body.strip(), [], True
 
-        self.store.finish(jid, answer.strip(), sources, notice)
+        if not self.store.finish(jid, answer.strip(), sources, notice):
+            raise _Gone
         self.on_event(jid, "done", {"notice": notice, "sources": sources})

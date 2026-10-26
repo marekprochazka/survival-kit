@@ -87,8 +87,19 @@ async function openChat(id) {
   if ([...$("model").options].some((o) => o.value === chat.model)) $("model").value = chat.model;
   $("messages").replaceChildren();
   messages.forEach(showMessage);
-  if (job) followJob(job.id);
+  if (job && (job.state === "failed" || job.state === "cancelled")) {
+    $("messages").appendChild(el("p", "status error", `No answer: ${job.error || job.state}`));
+  }
+  const open = job && (job.state === "queued" || job.state === "running");
+  setAsking(!open); // one open question per chat: follow-ups wait until it is answered
+  if (open) followJob(job.id);
   loadChats();
+}
+
+function setAsking(on) {
+  $("question").disabled = !on;
+  $("ask").querySelector("button").disabled = !on;
+  $("question").placeholder = on ? "Ask something…" : "Wait for the answer to finish…";
 }
 
 // follow one answer: replay (text so far) first, then live events
@@ -128,12 +139,20 @@ function followJob(jobId) {
   });
   src.addEventListener("done", () => { src.close(); follow = null; openChat(current); });
   src.addEventListener("error", (e) => {
-    if (!e.data) return; // a dropped connection: EventSource reconnects by itself
+    if (!e.data) {
+      // a dropped connection: EventSource reconnects by itself — unless the server refused
+      if (src.readyState !== EventSource.CLOSED) return;
+      follow = null;
+      status.className = "status error";
+      status.textContent = "Connection lost — reload the page to see the answer.";
+      return;
+    }
     src.close();
     follow = null;
     cancel.remove();
     status.className = "status error";
     status.textContent = `No answer: ${JSON.parse(e.data).error}`;
+    setAsking(true);
   });
 }
 

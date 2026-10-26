@@ -9,6 +9,7 @@ Standard library only; Kiwix and the model are injected so it can be tested offl
 import html
 import json
 import re
+import urllib.error
 import urllib.parse
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
@@ -18,6 +19,7 @@ _json = json  # model_call's `json=` flag shadows the module inside it
 TOP_HITS = 5  # search results kept
 TOP_READ = 3  # articles read
 ARTICLE_CHARS = 4000  # per article, so 3 articles + the conversation fit an 8k context
+PATTERN_CHARS = 200  # search words: a pasted essay must not become a huge URL
 WIKI_DOWN = "the wiki could not be reached"
 
 PLAN_SYSTEM = """You choose where to look in an offline wiki before a question is answered.
@@ -102,34 +104,41 @@ def parse_search(xml):
 class _Text(HTMLParser):
     SKIP = {"script", "style", "header", "footer", "nav", "noscript", "sup", "head", "template"}
     BLOCK = {"p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "div", "br", "tr", "dd", "dt", "section"}
-    VOID = {"br", "img", "hr", "meta", "link", "input", "wbr", "source"}
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.out, self.skip = [], []
+        self.out = []
+        # inside a skipped element only its own tag is counted (other tags may be unclosed
+        # or void — counting them could keep the rest of the page skipped)
+        self.skip_tag, self.skip_depth = None, 0
 
     def handle_starttag(self, tag, attrs):
-        if tag in self.VOID:
-            if tag == "br" and not self.skip:
-                self.out.append("\n")
+        if self.skip_tag:
+            if tag == self.skip_tag:
+                self.skip_depth += 1
             return
         a = dict(attrs)
-        hidden = "catlinks" in (a.get("id") or "") + (a.get("class") or "")
-        if self.skip or tag in self.SKIP or hidden:
-            self.skip.append(tag)
+        if tag in self.SKIP or "catlinks" in (a.get("id") or "") + (a.get("class") or ""):
+            self.skip_tag, self.skip_depth = tag, 1
         elif tag in self.BLOCK:
             self.out.append("\n")
 
+    def handle_startendtag(self, tag, attrs):  # <br/>, <img/>: never opens anything
+        if not self.skip_tag and tag in self.BLOCK:
+            self.out.append("\n")
+
     def handle_endtag(self, tag):
-        if self.skip:
-            if self.skip[-1] == tag:
-                self.skip.pop()
+        if self.skip_tag:
+            if tag == self.skip_tag:
+                self.skip_depth -= 1
+                if self.skip_depth == 0:
+                    self.skip_tag = None
             return
         if tag in self.BLOCK:
             self.out.append("\n")
 
     def handle_data(self, data):
-        if not self.skip:
+        if not self.skip_tag:
             self.out.append(re.sub(r"\s+", " ", data))  # in HTML, a newline in text is a space
 
 
@@ -186,7 +195,7 @@ class Lookup:
 
     def search(self, words, books, n=TOP_HITS):
         query = [("books.name", b) for b in books]
-        query += [("pattern", words), ("format", "xml"), ("pageLength", str(n))]
+        query += [("pattern", words[:PATTERN_CHARS]), ("format", "xml"), ("pageLength", str(n))]
         return parse_search(self.fetch(f"{self.kiwix}/search?" + urllib.parse.urlencode(query)))[:n]
 
     def read(self, path, limit=ARTICLE_CHARS):
@@ -219,7 +228,14 @@ class Lookup:
             books = self.books()
             plan = self.plan(question, model, history, books)
             hits = self.search(plan["words"], plan["books"]) if plan["books"] else []
-            articles = [self.read(h["path"]) for h in hits[:TOP_READ]]
+            articles = []
+            for h in hits:  # a missing article (stale index) is skipped, not fatal
+                if len(articles) == TOP_READ:
+                    break
+                try:
+                    articles.append(self.read(h["path"]))
+                except urllib.error.HTTPError:
+                    continue
             return {"plan": plan, "hits": hits, "articles": articles, "error": None}
         except (OSError, ET.ParseError) as e:
             self.invalidate()

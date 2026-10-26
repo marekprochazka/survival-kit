@@ -66,6 +66,10 @@ class Parsing(unittest.TestCase):
         short = lookup.html_to_text("<p>Cool  the\n burn.</p><script>x()</script>", limit=100)
         self.assertEqual(short, "Cool the burn.")
 
+    def test_html_unclosed_tags_in_skipped_region(self):
+        page = "<header><p>menu<li>x<col><embed></header><p>Real text.</p>"
+        self.assertEqual(lookup.html_to_text(page, limit=100), "Real text.")
+
     def test_parse_plan(self):
         known = {MED, LUA}
         plan = lookup.parse_plan(json.dumps({"books": [MED, "nope"], "words": "burn treatment"}), known)
@@ -118,6 +122,29 @@ class Run(unittest.TestCase):
         r = self.make("{}", down=True).run("burn", "llama", [])
         self.assertEqual(r["articles"], [])
         self.assertTrue(r["error"])
+
+    def test_run_skips_missing_article(self):
+        import urllib.error
+
+        base = fake_fetch()
+
+        def fetch(url):
+            if url.endswith("/Burn"):
+                raise urllib.error.HTTPError(url, 404, "not found", None, None)
+            return base(url)
+
+        lk = lookup.Lookup(fetch, KIWIX, PUBLIC, lambda *a, **k: json.dumps({"books": [MED], "words": "burn"}))
+        r = lk.run("burn", "m", [])
+        self.assertIsNone(r["error"])
+        urls = [a["url"] for a in r["articles"]]
+        self.assertEqual(len(urls), 2)  # 3 hits, the missing one skipped
+        self.assertFalse(any(u.endswith("/Burn") for u in urls))
+
+    def test_search_pattern_capped(self):
+        calls = []
+        lk = self.make("{}", calls=calls)
+        lk.search("w " * 1000, [MED])
+        self.assertLessEqual(len([c for c in calls if "/search?" in c][0]), 600)
 
     def test_books_cached_until_invalidated(self):
         calls = []
