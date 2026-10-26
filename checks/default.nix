@@ -18,6 +18,7 @@ let
     eval-firstboot = import ./eval-firstboot.nix args;
     eval-iso = import ./eval-iso.nix args;
     firstboot-script = import ./firstboot-script.nix args;
+    panel-drift = import ./panel-drift.nix args;
   };
 in
 evalChecks

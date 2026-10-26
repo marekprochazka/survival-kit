@@ -41,7 +41,7 @@ let
     in
     ''
       <a class="tile" href="${esc t.url}"${lib.optionalString isService " data-health=\"${esc t.health}\""}>
-        <span class="title">${esc t.title}</span>${lib.optionalString isService "<span class=\"dot\" aria-label=\"status unknown\"></span>"}
+        <span class="title">${esc t.title}</span>${lib.optionalString isService "<span class=\"dot\" role=\"img\" aria-label=\"status unknown\"></span>"}
         <span class="desc">${esc t.description}</span>
       </a>
     '';

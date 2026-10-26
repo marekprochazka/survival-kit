@@ -40,7 +40,7 @@ pkgs.testers.runNixOSTest {
         return int(machine.succeed(CATALOG).strip())
 
     def wait_books(n):
-        machine.wait_until_succeeds(f"test $({CATALOG}) -eq {n}")
+        machine.wait_until_succeeds(f"test $({CATALOG}) -eq {n}", timeout=120)
 
     machine.wait_for_unit("kiwix-library.service")
     machine.wait_for_unit("kiwix-serve.service")
@@ -85,6 +85,12 @@ pkgs.testers.runNixOSTest {
         wait_books(STARTER_BOOKS + 1)
         machine.succeed("rm " + ZIMS + "/gone.zim")
 
+    with subtest("files that are not .zim are reported, not silently ignored"):
+        machine.succeed("echo hello > " + ZIMS + "/notes.txt")
+        machine.succeed("systemctl restart kiwix-library.service")
+        machine.wait_until_succeeds("journalctl -b -u kiwix-library | grep -q 'ignoring.*notes.txt'", timeout=60)
+        machine.succeed("rm " + ZIMS + "/notes.txt")
+
     with subtest("a root-only (0600) drop-in is still served"):
         machine.succeed("install -m 0600 ${privateZim} " + ZIMS + "/private-test.zim")
         machine.succeed("systemctl restart kiwix-library.service")
@@ -97,6 +103,7 @@ pkgs.testers.runNixOSTest {
         assert page.index("Wiki") < page.index("Manual"), "tiles must be sorted by order"
         assert 'href="http://wiki.deck/content/survival-kit"' in page, "Manual tile link"
         assert 'href="http://wiki.deck/content/survival-kit-dev"' in page, "Developer guide tile link"
+        assert 'role="img"' in page, "status dots must be announced to screen readers"
         machine.succeed("curl -sf -o /dev/null http://deck/style.css")
         machine.succeed("curl -sf -o /dev/null http://deck/status.js")
 

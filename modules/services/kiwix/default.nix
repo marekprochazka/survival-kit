@@ -62,8 +62,14 @@ in
       script = ''
         install -d -m 0755 ${dataDir} ${dataDir}/zims
         tmp=$(mktemp --suffix=.xml ${dataDir}/.library.XXXXXX)
+        trap 'rm -f "$tmp"' EXIT # no leftover temp catalogs if anything fails
         printf '<library version="20110515"></library>\n' > "$tmp"
         shopt -s nullglob
+        # say what is ignored instead of skipping it silently
+        for f in ${dataDir}/zims/*; do
+          [[ $f == *.zim ]] ||
+            echo "kiwix-library: ignoring $f: not a .zim file (rename .ZIM; join split .zimaa/.zimab parts first)" >&2
+        done
         ${lib.optionalString cfg.starterContent ''
           for zim in ${starterDir}/*.zim; do
             kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2

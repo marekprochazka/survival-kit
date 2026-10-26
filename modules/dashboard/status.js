@@ -4,6 +4,8 @@ const INTERVAL_MS = 15000;
 
 async function check(tile) {
   const dot = tile.querySelector(".dot");
+  // keep the last colour while re-checking (no 15 s flicker); tell assistive tech
+  dot.setAttribute("aria-busy", "true");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   let state = "down";
@@ -17,6 +19,7 @@ async function check(tile) {
   clearTimeout(timer);
   dot.dataset.state = state;
   dot.setAttribute("aria-label", "status: " + state);
+  dot.removeAttribute("aria-busy");
 }
 
 function checkAll() {

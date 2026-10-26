@@ -33,6 +33,13 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("pgrep -u deck -f xfce4-panel", timeout=120)
         machine.wait_for_window("xfce4-panel")
 
+    with subtest("apps and power settings are in place"):
+        machine.succeed("command -v papers btop")
+        # xfce4-power-manager applies blank-on-ac = 10 min as the X screen saver timeout
+        machine.wait_until_succeeds(
+            "su - deck -c 'DISPLAY=:0 xset q' | grep -q 'timeout:  600'", timeout=60
+        )
+
     with subtest("no screen locker installed"):
         machine.fail("test -e /run/current-system/sw/bin/xfce4-screensaver")
 
@@ -56,6 +63,8 @@ pkgs.testers.runNixOSTest {
     with subtest("Firefox opens the dashboard, maximized"):
         machine.wait_for_window("survival-kit")  # dashboard <title> = hostname
         # select by WM_CLASS: every wmctrl line also contains the hostname "survival-kit"
+        # retried: the window can show up in X before the window manager lists it
+        machine.wait_until_succeeds("DISPLAY=:0 wmctrl -l -x | grep -q 'Navigator.firefox'", timeout=60)
         wid = machine.succeed("DISPLAY=:0 wmctrl -l -x | grep 'Navigator.firefox' | head -1 | cut -d' ' -f1").strip()
         machine.wait_until_succeeds(
             f"DISPLAY=:0 xprop -id {wid} _NET_WM_STATE | grep -q _NET_WM_STATE_MAXIMIZED_VERT",
