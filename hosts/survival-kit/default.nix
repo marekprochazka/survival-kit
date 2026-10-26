@@ -16,8 +16,17 @@
 
   networking.hostName = "survival-kit";
 
-  # services (no lite/full profiles yet — ADR-0002 profiles come with ≥2 services)
-  survivalKit.services.kiwix.enable = true;
+  survivalKit = {
+    # services (no lite/full profiles yet — ADR-0002 profiles come with ≥2 services)
+    services = {
+      kiwix.enable = true;
+      vaultwarden.enable = true;
+    };
+    desktop = {
+      enable = true;
+      autoLoginUser = "deck";
+    };
+  };
 
   # The owner's account. Fixed name (autologin needs it at build time); the
   # display name and password are set by the first-boot prompt (modules/firstboot).
@@ -25,11 +34,6 @@
     isNormalUser = true;
     extraGroups = [ "wheel" ]; # sudo rights
     initialHashedPassword = "!"; # locked until first boot sets it
-  };
-
-  survivalKit.desktop = {
-    enable = true;
-    autoLoginUser = "deck";
   };
 
   # dev VM (utils/run) only — XFCE + Firefox need more than the 1 GB default

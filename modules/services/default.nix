@@ -4,5 +4,6 @@
   imports = [
     ./web.nix
     ./kiwix
+    ./vaultwarden
   ];
 }

@@ -20,6 +20,7 @@ let
     firstboot-script = import ./firstboot-script.nix args;
     panel-drift = import ./panel-drift.nix args;
     eval-tls = import ./eval-tls.nix args;
+    eval-vaultwarden = import ./eval-vaultwarden.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in

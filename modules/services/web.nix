@@ -147,7 +147,16 @@ in
         };
       }
       // lib.mapAttrs' (
-        _: svc: lib.nameValuePair (fqdn svc) (tlsVhost // { locations."/".proxyPass = upstream svc; })
+        _: svc:
+        lib.nameValuePair (fqdn svc) (
+          tlsVhost
+          // {
+            locations."/" = {
+              proxyPass = upstream svc;
+              proxyWebsockets = true; # live updates (Vaultwarden sync, later Trilium, Jellyfin)
+            };
+          }
+        )
       ) registry;
     };
 

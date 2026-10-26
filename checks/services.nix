@@ -132,6 +132,17 @@ pkgs.testers.runNixOSTest {
         machine.succeed("${curl} -sf -o /dev/null https://deck/style.css")
         machine.succeed("${curl} -sf -o /dev/null https://deck/status.js")
 
+    with subtest("Vaultwarden (passwords)"):
+        machine.wait_for_unit("vaultwarden.service")
+        machine.wait_until_succeeds("${curl} -sf -o /dev/null https://vault.deck/alive", timeout=60)
+        machine.succeed("${curl} -sf https://vault.deck/ | grep -q '<title page-title>Vaultwarden Web</title>'")  # the web vault
+        machine.succeed("${curl} -sf -o /dev/null https://deck/health/vault")
+        names = machine.succeed("openssl x509 -in /var/lib/survival-kit/tls/deck.crt -noout -ext subjectAltName")
+        assert "DNS:vault.deck" in names, names
+        page = machine.succeed("${curl} -sf https://deck/")
+        assert page.index("Wiki") < page.index("Passwords") < page.index("Manual"), "tile order"
+        assert 'href="https://vault.deck/"' in page, "Passwords tile link"
+
     with subtest("plain http redirects to https"):
         for url in ["http://wiki.deck/", "http://deck/", "http://127.0.0.1/"]:
             res = machine.succeed(f"curl -s -o /dev/null -w '%{{http_code}} %{{redirect_url}}' {url}")
