@@ -19,6 +19,8 @@ let
     eval-iso = import ./eval-iso.nix args;
     firstboot-script = import ./firstboot-script.nix args;
     panel-drift = import ./panel-drift.nix args;
+    eval-tls = import ./eval-tls.nix args;
+    tls-script = import ./tls-script.nix args;
   };
 in
 evalChecks

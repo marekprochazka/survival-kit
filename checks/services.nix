@@ -30,7 +30,10 @@ in
 pkgs.testers.runNixOSTest {
   name = "services";
   node.specialArgs = { inherit inputs self; };
-  nodes.machine = import ./host-node.nix { inherit inputs; };
+  nodes.machine = {
+    imports = [ (import ./host-node.nix { inherit inputs; }) ];
+    environment.systemPackages = [ pkgs.openssl ]; # test-only: inspect certificates
+  };
   testScript = ''
     STARTER_BOOKS = 7  # bundled ZIMs; raised as starter content lands
     ZIMS = "/var/lib/survival-kit/kiwix/zims"
@@ -62,6 +65,25 @@ pkgs.testers.runNixOSTest {
     with subtest("developer guide is served and linked from the manual"):
         machine.wait_until_succeeds("curl -sfL http://wiki.deck/content/survival-kit-dev | grep -q 'survival-kit developer guide'")
         machine.succeed("curl -sfL http://wiki.deck/content/survival-kit | grep -q 'content/survival-kit-dev'")
+
+    with subtest("the box's certificate authority"):
+        T = "/var/lib/survival-kit/tls"
+        machine.wait_for_unit("survival-kit-tls.service")
+        for key in ["ca.key", "deck.key"]:
+            assert machine.succeed(f"stat -c '%a %U' {T}/{key}").strip() == "600 root", key
+        machine.succeed(f"openssl verify -CAfile {T}/ca.crt {T}/deck.crt")
+        names = machine.succeed(f"openssl x509 -in {T}/deck.crt -noout -ext subjectAltName")
+        for n in ["DNS:deck", "DNS:wiki.deck", "DNS:survival-kit.local"]:
+            assert n in names, f"{n} missing from {names}"
+        # name constraints: a certificate for another site, signed by this CA, is refused
+        machine.succeed(
+            "cd /tmp && openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes"
+            " -keyout ex.key -out ex.csr -subj /CN=example.com"
+            " && printf 'subjectAltName=DNS:example.com\\n' > ex.ext"
+            f" && openssl x509 -req -in ex.csr -CA {T}/ca.crt -CAkey {T}/ca.key -out ex.crt -extfile ex.ext -days 30"
+        )
+        out = machine.fail(f"openssl verify -CAfile {T}/ca.crt /tmp/ex.crt 2>&1")
+        assert "permitted subtree violation" in out, out
 
     with subtest("health endpoint is up"):
         machine.succeed("curl -sf -o /dev/null http://deck/health/kiwix")

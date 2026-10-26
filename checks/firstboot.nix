@@ -52,6 +52,7 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("pgrep -u deck -t tty2", timeout=30)
 
     with subtest("after a reboot there is no prompt"):
+        ca_before = machine.succeed("sha256sum /var/lib/survival-kit/tls/ca.crt")
         machine.shutdown()
         machine.start()
         machine.wait_until_succeeds("pgrep -u deck -f xfce4-session", timeout=180)
@@ -60,5 +61,7 @@ pkgs.testers.runNixOSTest {
         )
         # NixOS rewrites /etc/passwd at every boot — the display name must survive
         assert "Test Person" in machine.succeed("getent passwd deck"), "display name lost on reboot"
+        # the box's CA is created once and never replaced (trust would break)
+        assert machine.succeed("sha256sum /var/lib/survival-kit/tls/ca.crt") == ca_before, "CA changed on reboot"
   '';
 }

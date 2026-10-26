@@ -43,6 +43,11 @@ in
       extraArgs = [ "--monitorLibrary" ]; # reload when library.xml changes
     };
 
+    # every catalog refresh restarts kiwix-serve (see the script's end): allow quick
+    # successive refreshes (default limit: 5 starts / 10 s), but still stop a crash loop
+    # (Restart=on-failure, ~0.1 s apart → 20 starts within ~2 s)
+    systemd.services.kiwix-serve.unitConfig.StartLimitBurst = 20;
+
     systemd.services.kiwix-library = {
       description = "Rebuild the Kiwix catalog from available ZIM files";
       # Wants (not Requires): if a rebuild fails, kiwix-serve keeps running on the
@@ -55,6 +60,9 @@ in
       ];
       before = [ "kiwix-serve.service" ];
       path = [ config.services.kiwix-serve.package ];
+      # re-run on demand (after adding ZIMs, later by an import tile): no systemd
+      # start limit — the default (5 starts / 10 s) refuses quick successive refreshes
+      startLimitIntervalSec = 0;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;

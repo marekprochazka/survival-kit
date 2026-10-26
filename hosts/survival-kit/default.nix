@@ -7,6 +7,7 @@
     ../../modules/dashboard
     ../../modules/desktop
     ../../modules/firstboot
+    ../../modules/tls
     ./disko.nix
   ]
   # written by survival-kit-install on installed machines (disk choice);
