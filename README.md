@@ -25,9 +25,10 @@ Working prototype, tested in QEMU and VirtualBox (not yet on real hardware).
   docs and a built-in user manual.
 - Password manager (Vaultwarden) at `https://vault.deck`.
 - `full` only: local AI models (Ollama, CPU) in the terminal; models come from a USB stick.
+- Content manager at `https://content.deck`: import wiki books and AI models from a stick,
+  see disk use, delete.
 
-Not yet: more services (file sync, offline maps, notes, media, …), importing content from
-USB drives, a chat page for the AI, Wi-Fi hotspot mode, updates.
+Not yet: more services (file sync, offline maps, notes, media, …), a chat page for the AI, Wi-Fi hotspot mode, updates.
 
 ## Try it
 

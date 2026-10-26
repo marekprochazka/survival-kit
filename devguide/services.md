@@ -61,6 +61,10 @@ Example: a service `notes` that listens on port 3000.
 5. Add a test: a subtest in `checks/services.nix` (or a new VM test) that the service
    answers at `https://notes.deck` (with `curl --cacert …/ca.crt`) — see [Testing](testing.html).
 
+**Content from sticks.** If the service has content people bring on external media (books,
+models, media), give it a kind in the [Content manager](content.html) rather than its own
+import path.
+
 **Email-shaped logins.** If a service insists on an email address as the login name, the
 box's convention is `<name>@<subdomain>.deck` (e.g. `anna@vault.deck`) — nothing is ever
 mailed. Say so on the service's manual page.

@@ -8,6 +8,7 @@ password is what `sudo` and the text console (Ctrl+Alt+F2) ask for — the
 desktop itself logs in automatically.
 
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
+- [Content](content.html) — bring in wiki books and AI models from a stick
 - [Passwords](passwords.html) — the offline password manager
 - [AI models](ai-models.html) — local AI in the terminal (full profile)
 - [Adding content](adding-content.html) — more wikis and documents

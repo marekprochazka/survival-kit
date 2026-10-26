@@ -4,7 +4,9 @@ The wiki serves `.zim` files — packaged websites. Thousands exist at
 <https://library.kiwix.org> (Wikipedia, Stack Exchange, medical guides, …);
 download them while you have internet.
 
-To add one:
+The easy way: the **Content** tile — see [Content](content.html).
+
+By hand, in a terminal:
 
 1. Copy the file into `/var/lib/survival-kit/kiwix/zims/`
    (`sudo cp wikipedia.zim /var/lib/survival-kit/kiwix/zims/`).

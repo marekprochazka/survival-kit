@@ -13,6 +13,8 @@ each). Models never come with the box — bring them on a USB stick as a **`.ggu
 
 ## Adding a model from a USB stick
 
+The easy way: the **Content** tile — see [Content](content.html). By hand, in a terminal:
+
 Plug in the stick and **open it in the file manager** (double-click its icon on the desktop
 or in the file manager's side panel) — that mounts it; the address bar then shows its path,
 e.g. `/run/media/deck/MYSTICK`. Then open a terminal and run (with your stick's and file's

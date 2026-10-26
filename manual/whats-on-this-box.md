@@ -5,6 +5,7 @@
 | <https://deck> | Dashboard — every service, with a live status dot |
 | <https://wiki.deck> | Wiki — offline encyclopedias and documentation (Kiwix) |
 | <https://vault.deck> | Passwords — offline password manager (see [Passwords](passwords.html)) |
+| <https://content.deck> | Content — import wiki books and AI models, see disk use (see [Content](content.html)) |
 
 **lite or full.** The box was installed as one of two *profiles*: **lite** (the above —
 for machines with little memory or a slow processor) or **full** (adds local

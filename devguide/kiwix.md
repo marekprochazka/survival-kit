@@ -20,6 +20,8 @@
     file is removed if anything fails.
   - After a successful rebuild it restarts kiwix-serve (`--monitorLibrary` alone misses a
     second change within the same second).
+  - A built-in book is skipped when `zims/` holds an import with the same file name
+    ("built-in … replaced by import") — see [Content manager](content.html).
   - kiwix-serve only *wants* kiwix-library: if a rebuild fails, the wiki keeps running on
     the last good catalog.
 

@@ -11,7 +11,7 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 | Layer | Checks | Speed | Runs |
 |---|---|---|---|
 | Static | `lint` (nixfmt, statix, deadnix) | seconds | pre-commit hook, CI, locally |
-| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles) + `firstboot-script` + `tls-script` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
+| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles, content) + `firstboot-script` + `tls-script` + `content-unit` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
 | VM | `boot`, `services`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
 | Closure | `lite-closure` (no Ollama anywhere in a lite system) | minutes (builds lite) | locally |
 | Install | installing from the ISO | long | by hand (QEMU / VirtualBox, offline) |
@@ -29,6 +29,8 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 - `firstboot-script` runs the real prompt script with scripted keyboard input (incl. a real
   SIGINT and end-of-input) and stand-ins
   for `usermod`/`chpasswd`.
+- `content-unit` runs the content manager's Python tests (`unittest`, stdlib) — names,
+  space, uploads, the HTTP API on a real local server — with stand-ins for Kiwix/Ollama.
 - `tls-script` runs the real certificate script in the build sandbox: creates the CA once,
   keeps it, re-issues the site certificate on new names or a mismatched key.
 - VM tests talk HTTPS like Firefox does: `curl --cacert /var/lib/survival-kit/tls/ca.crt`.
