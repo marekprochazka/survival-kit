@@ -18,6 +18,9 @@ pkgs.testers.runNixOSTest {
   testScript = ''
     with subtest("prompt on tty1 before the desktop"):
         machine.wait_until_tty_matches("1", "Your name", timeout=120)
+        # QEMU's extra input devices re-run console setup on tty1, which can drop
+        # keys typed meanwhile: let device setup settle before typing
+        machine.succeed("udevadm settle")
         machine.fail("systemctl is-active display-manager.service")
 
     with subtest("name, a mismatched password pair, then a matching pair"):
@@ -27,8 +30,10 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_tty_matches("1", "Repeat")
         machine.send_chars("different\n")
         machine.wait_until_tty_matches("1", "not matching")
+        # wait for each (repeated) prompt before typing — no blind sleeps
+        machine.wait_until_tty_matches("1", "(?s)Choose a password.*Choose a password")
         machine.send_chars("s3cret-pass\n")
-        machine.sleep(1)
+        machine.wait_until_tty_matches("1", "(?s)Repeat.*Repeat")
         machine.send_chars("s3cret-pass\n")
 
     with subtest("desktop starts, logged in as deck with the display name"):
