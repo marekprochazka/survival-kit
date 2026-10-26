@@ -46,6 +46,7 @@ in
         PROTECTED = "survival-kit survival-kit-dev"; # the box's own manuals
         OLLAMA = if ollama then "1" else "0";
         MODELS_DIR = config.services.ollama.models;
+        LOOKUP_URL = lib.optionalString config.survivalKit.services.lookup.enable "http://127.0.0.1:8310";
         PYTHONUNBUFFERED = "1";
         # the ollama CLI panics without a $HOME (it derives ~/.ollama even as a client)
         HOME = stateDir;

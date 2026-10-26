@@ -7,5 +7,7 @@
     ./vaultwarden
     ./ollama
     ./content
+    ./lookup
+    ./chat
   ];
 }

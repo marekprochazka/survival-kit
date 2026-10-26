@@ -40,8 +40,17 @@ pkgs.testers.runNixOSTest {
     environment.systemPackages = [ pkgs.openssl ]; # test-only: inspect certificates
     # the content manager always keeps ≥ 2 GiB free; the default 1 GB test disk can't
     virtualisation.diskSize = 4096;
+    # no real model can run in the test VM: the chat and lookup talk to a stand-in
+    survivalKit.services.chat.ollamaUrl = "http://127.0.0.1:11500";
+    systemd.services.fake-ollama = {
+      wantedBy = [ "multi-user.target" ];
+      before = [ "survival-kit-chat.service" ];
+      serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./fake-ollama.py}";
+    };
   };
   testScript = ''
+    import json
+
     STARTER_BOOKS = 7  # bundled ZIMs; raised as starter content lands
     ZIMS = "/var/lib/survival-kit/kiwix/zims"
     CATALOG = "${curl} -sf 'https://wiki.deck/catalog/v2/entries?count=-1' | grep -c '<entry>' || true"
@@ -193,6 +202,42 @@ pkgs.testers.runNixOSTest {
         r = machine.succeed("${curl} -s https://content.deck/api/upload?kind=model\\&file=junk.gguf -T /etc/hostname")
         assert "could not be added" in r and "panic" not in r and "main.go" not in r, r
         machine.succeed("test -z \"$(ls -A " + ZIMS + "/.incoming)\"")
+
+    with subtest("Wiki lookup, MCP and the wiki-first chat"):
+        machine.wait_for_unit("survival-kit-lookup.service")
+        machine.wait_for_unit("survival-kit-chat.service")
+        machine.wait_for_open_port(8310)
+        machine.succeed("curl -sf http://127.0.0.1:8310/invalidate -X POST -H 'Content-Type: application/json' -d '{}'")
+        assert "dropin-test" in machine.succeed("curl -sf http://127.0.0.1:8310/books")
+        found = json.loads(machine.succeed(
+            "curl -sf http://127.0.0.1:8310/lookup -H 'Content-Type: application/json'"
+            " -d '{\"question\": \"dropin-test test page\", \"model\": \"test-model\", \"history\": []}'"))
+        assert found["error"] is None, found
+        assert any("/content/dropin-test/" in a["url"] for a in found["articles"]), found
+        # MCP over stdio, as oterm/mcphost would call it
+        out = machine.succeed(
+            "printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}'"
+            " '{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"wiki_search\",\"arguments\":{\"words\":\"dropin-test\"}}}'"
+            " | survival-kit-wiki-mcp")
+        assert "https://wiki.deck/content/dropin-test/" in out, out
+        # the chat: ask → the answer is stored with its sources
+        CH = "${curl} -sf https://chat.deck/api"
+        J = " -H 'Content-Type: application/json' -d "
+        chat = json.loads(machine.succeed(CH + "/chats" + J + "'{\"model\": \"test-model\"}'"))["id"]
+        job = json.loads(machine.succeed(CH + f"/chats/{chat}/ask" + J
+            + "'{\"question\": \"dropin-test test page\", \"model\": \"test-model\"}'"))["job"]
+        # a second question while the first is written waits in the queue
+        other = json.loads(machine.succeed(CH + "/chats" + J + "'{\"model\": \"test-model\"}'"))["id"]
+        job2 = json.loads(machine.succeed(CH + f"/chats/{other}/ask" + J
+            + "'{\"question\": \"dropin-test\", \"model\": \"test-model\"}'"))["job"]
+        replay = machine.succeed("${curl} -s --max-time 3 https://chat.deck/api/jobs/" + str(job2) + "/events || true")
+        assert '"state": "queued"' in replay, replay
+        machine.wait_until_succeeds(CH + f"/chats/{chat} | grep -q 'this is a test page'", timeout=120)
+        msgs = json.loads(machine.succeed(CH + f"/chats/{chat}"))["messages"]
+        assert msgs[-1]["role"] == "assistant" and not msgs[-1]["notice"], msgs
+        assert any("/content/dropin-test/" in s["url"] for s in msgs[-1]["sources"]), msgs
+        machine.wait_until_succeeds(CH + f"/chats/{other} | grep -q 'this is a test page'", timeout=120)
+        assert "https://chat.deck/" in machine.succeed("${curl} -sf https://deck/")  # the tile
 
     with subtest("plain http redirects to https"):
         for url in ["http://wiki.deck/", "http://deck/", "http://127.0.0.1/"]:

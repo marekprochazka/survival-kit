@@ -241,6 +241,14 @@ def kiwix_validate(path):
 
 def kiwix_refresh():
     subprocess.run(["systemctl", "restart", "kiwix-library.service"], check=True)
+    # the wiki lookup (chat) caches the book list: tell it (best effort, it may be off)
+    url = os.environ.get("LOOKUP_URL")
+    if url:
+        try:
+            req = urllib.request.Request(f"{url}/invalidate", data=b"{}", headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5).close()
+        except OSError:
+            pass
 
 
 class Ollama:

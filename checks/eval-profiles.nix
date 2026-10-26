@@ -29,6 +29,9 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   (svc lite).content.enable && lite.systemd.services.survival-kit-content.environment.OLLAMA == "0"
 ) "lite: the content manager is on, without the models section";
+assert lib.assertMsg (
+  (svc lite).lookup.enable && !(svc lite).chat.enable && (svc cfg).chat.enable
+) "the wiki lookup (and MCP) on both profiles, the chat only on full";
 assert lib.assertMsg liteOllama.services.ollama.enable
   "a hand override (lite + ollama.enable = true) must win over the profile default";
 pkgs.runCommand "eval-profiles" { } "touch $out"
