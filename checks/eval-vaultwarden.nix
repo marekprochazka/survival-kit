@@ -15,7 +15,13 @@ assert lib.assertMsg (
   vw.config.DOMAIN == "https://vault.deck"
 ) "DOMAIN must be the https URL (links in the web vault)";
 assert lib.assertMsg (vw.config.SIGNUPS_ALLOWED == true) "open signups (user decision)";
-assert lib.assertMsg (vw.backupDir == "/var/backup/vaultwarden") "daily backups must be on";
+assert lib.assertMsg (vw.backupDir == "/var/backup/vaultwarden/latest") "daily backups must be on";
+assert lib.assertMsg (
+  cfg.systemd.services.backup-vaultwarden.wantedBy == [ ]
+) "backups by timer only — a boot-time run would overwrite a good copy";
+assert lib.assertMsg
+  (lib.hasInfix "vaultwarden-keep-daily" cfg.systemd.services.backup-vaultwarden.serviceConfig.ExecStartPost)
+  "each backup must keep a dated copy";
 assert lib.assertMsg (
   !(lib.elem "network-online.target" (unit.wants ++ unit.after))
 ) "a loopback-only service must not wait for the network";

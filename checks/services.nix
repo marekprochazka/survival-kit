@@ -142,6 +142,12 @@ pkgs.testers.runNixOSTest {
         page = machine.succeed("${curl} -sf https://deck/")
         assert page.index("Wiki") < page.index("Passwords") < page.index("Manual"), "tile order"
         assert 'href="https://vault.deck/"' in page, "Passwords tile link"
+        # backup: one copy in latest/, a dated copy per day (running twice keeps one)
+        machine.succeed("systemctl start backup-vaultwarden.service")
+        machine.succeed("systemctl start backup-vaultwarden.service")
+        machine.succeed("test -s /var/backup/vaultwarden/latest/db.sqlite3")
+        machine.succeed("test -s /var/backup/vaultwarden/daily/$(date +%F)/db.sqlite3")
+        assert machine.succeed("ls /var/backup/vaultwarden/daily | wc -l").strip() == "1"
 
     with subtest("plain http redirects to https"):
         for url in ["http://wiki.deck/", "http://deck/", "http://127.0.0.1/"]:

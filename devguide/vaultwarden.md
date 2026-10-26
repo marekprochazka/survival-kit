@@ -15,8 +15,12 @@
   `<name>@<service address>` (see [Services](services.html)); nothing is ever mailed — there
   is no mail server and no SMTP settings.
 - Data: `/var/lib/vaultwarden` (SQLite, mode 0700). Daily backup (timer
-  `backup-vaultwarden`, 23:00, `Persistent` → at the next boot if missed) to
-  `/var/backup/vaultwarden` — same disk.
+  `backup-vaultwarden`, 23:00, `Persistent` → at the next boot if missed): upstream's
+  script writes one copy to `/var/backup/vaultwarden/latest`, then our `ExecStartPost`
+  (`vaultwarden-keep-daily`, as root) copies it to `daily/<date>` and keeps the 7 newest
+  (by age, so a wrong clock can't delete the newest). Upstream also runs the backup at
+  every boot — switched off (`wantedBy = mkForce [ ]`): it would overwrite a good copy
+  before anyone noticed a problem. Same disk: no protection against a dead disk.
 - Upstream's `network-online.target` dependency is removed: a loopback-only service on an
   offline box shouldn't wait for the network.
 - Health: `/alive`. Logs: `journalctl -u vaultwarden`.

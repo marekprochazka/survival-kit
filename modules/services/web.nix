@@ -160,11 +160,12 @@ in
       ) registry;
     };
 
-    # the certificate must exist before nginx loads it. Requires: a re-issue (new
-    # service → new name → the TLS unit restarts on switch) restarts nginx too.
+    # the certificate must exist before nginx loads it. Wants (not Requires): if the
+    # TLS script fails, nginx still starts with the certificate already on disk. A
+    # re-issue reloads nginx from the script itself.
     systemd.services.nginx = {
       after = [ "survival-kit-tls.service" ];
-      requires = [ "survival-kit-tls.service" ];
+      wants = [ "survival-kit-tls.service" ];
     };
 
     # Local name resolution for the box itself; dnsmasq (AP-hub round) will

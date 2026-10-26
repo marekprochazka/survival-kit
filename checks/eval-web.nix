@@ -107,7 +107,8 @@ assert lib.assertMsg (lib.all (
   && v.sslCertificateKey == "/var/lib/survival-kit/tls/deck.key"
 ) (lib.attrValues vhosts)) "every vhost: https only (http → 301), with the box's certificate";
 assert lib.assertMsg (
-  lib.elem "survival-kit-tls.service" base.config.systemd.services.nginx.requires
+  lib.elem "survival-kit-tls.service" base.config.systemd.services.nginx.wants
   && lib.elem "survival-kit-tls.service" base.config.systemd.services.nginx.after
-) "nginx needs the certificate first (and restarts when it is re-issued)";
+  && !(lib.elem "survival-kit-tls.service" base.config.systemd.services.nginx.requires)
+) "nginx starts after the TLS service, but survives its failure (wants, not requires)";
 pkgs.runCommand "eval-web" { } "touch $out"

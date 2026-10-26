@@ -17,8 +17,11 @@ signed the site's certificate. Public CAs can't sign for `.deck` (not a real top
 domain) — and there is no internet anyway. So the box is its own CA:
 
 - `survival-kit-tls.service` (`modules/tls/tls.sh`, openssl) runs at every boot, before nginx.
-- **The CA** (`ca.key`, `ca.crt`) is created once, when missing — and never replaced
-  automatically: a new CA would break trust everywhere the old one was installed.
+- **The CA** (`ca.key`, `ca.crt`) is created once, when missing — and otherwise kept: a
+  new CA would break trust everywhere the old one was installed. One exception: when the
+  box's names change (hostname or `survivalKit.web.domain`), the old CA's name constraints
+  (below) can't cover the new names, so it is re-created ("recreated the certificate
+  authority" in `journalctl -u survival-kit-tls`). Firefox picks it up at its next start.
 - **The site certificate** (`deck.crt`) carries every name explicitly: `deck`, each
   registered `<sub>.deck`, and `<hostname>.local`. (A wildcard `*.deck` does not work
   under a one-label domain.) It is re-issued when the names change (a new service), when
@@ -35,8 +38,9 @@ is rejected ("permitted subtree violation"). The services VM test checks exactly
 
 ## The clock
 
-Old machines often boot with a wrong clock (dead CMOS battery). Normal certificates last
-about a year and would look "not yet valid" or "expired". Ours are valid from 2000 to 2100.
+Old machines often boot with a wrong clock (a dead CMOS battery can reset it to 1970 or
+1980). Normal certificates last about a year and would look "not yet valid" or "expired".
+Ours are valid from 1970 to 2100.
 (The ~1-year limit is a rule for public CAs, not for one you install yourself; the desktop
 VM test proves Firefox accepts ours.)
 
@@ -52,8 +56,10 @@ makes its own keys.
 | `deck.key` | 0640 root:nginx | the site key — nginx runs as user `nginx` and must read it |
 | `deck.crt` | 0644 | the site certificate |
 
-`web.nix` sets `forceSSL` and the certificate paths on every vhost; nginx `Requires` and
-starts `After` the TLS service, so a re-issued certificate restarts nginx with it.
+`web.nix` sets `forceSSL` and the certificate paths on every vhost. nginx starts `After`
+the TLS service and only `Wants` it: if the script fails (a full disk, say), nginx still
+starts with the certificate already on disk. After a re-issue the script reloads a running
+nginx itself (`systemctl --no-block try-reload-or-restart`; at boot nginx isn't started yet).
 
 ## On the command line
 

@@ -30,6 +30,8 @@ let
     runtimeInputs = with pkgs; [
       openssl
       coreutils
+      gnugrep
+      config.systemd.package # systemctl: reload nginx after a re-issue
     ];
     text = ''
       TLS_DIR=${lib.escapeShellArg cfg.dir}
@@ -37,6 +39,7 @@ let
       PERMITTED=${lib.escapeShellArg (lib.concatStringsSep " " permitted)}
       NAMES=${lib.escapeShellArg (lib.concatStringsSep " " names)}
       KEY_GROUP=${lib.escapeShellArg (lib.optionalString config.services.nginx.enable config.services.nginx.group)}
+      RELOAD_UNIT=${lib.escapeShellArg (lib.optionalString config.services.nginx.enable "nginx.service")}
     ''
     + builtins.readFile ./tls.sh;
   };

@@ -16,8 +16,10 @@ and keep it somewhere safe.
 locked by its own master password.
 
 **Backups.** Every day at 23:00 (or at the next start, if the box was off) a copy of the
-password database is saved to `/var/backup/vaultwarden`. That copy is on the same disk —
-to survive a broken disk, copy the folder to a USB stick now and then:
+password database is saved to `/var/backup/vaultwarden`; the last 7 days are kept in
+`daily/`, one folder per day — so a mistake noticed a few days later can still be undone.
+These copies are on the same disk — to survive a broken disk, copy the folder to a USB
+stick now and then:
 
     sudo cp -r /var/backup/vaultwarden /run/media/deck/<your stick>/
 
