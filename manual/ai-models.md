@@ -13,7 +13,10 @@ each). Models never come with the box — bring them on a USB stick as a **`.ggu
 
 ## Adding a model from a USB stick
 
-Plug in the stick, open a terminal, and run (with your stick's and file's names):
+Plug in the stick and **open it in the file manager** (double-click its icon on the desktop
+or in the file manager's side panel) — that mounts it; the address bar then shows its path,
+e.g. `/run/media/deck/MYSTICK`. Then open a terminal and run (with your stick's and file's
+names):
 
     printf 'FROM /run/media/deck/<stick>/<model>.gguf\n' > Modelfile
     ollama create <name> -f Modelfile

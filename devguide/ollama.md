@@ -12,9 +12,11 @@
         printf 'FROM /path/to/model.gguf\n' > Modelfile
         ollama create <name> -f Modelfile
 
-  The CLI uploads the file to the server, which stores it in its own blob store.
+  The CLI uploads the file to the server, which stores it in its own blob store. A USB
+  stick is mounted (under `/run/media/deck/<label>`) when first opened in the file manager
+  (udisks2 + gvfs), not on plug-in — there is no thunar-volman automount.
   (The future importer — ADR-0004 — will automate this.)
-- The `ollama` CLI is installed system-wide and talks to `127.0.0.1:11434` by default:
+- The `ollama` CLI is installed system-wide by the nixpkgs module and talks to `127.0.0.1:11434` by default:
   `ollama run/list/rm` work for `deck`.
 - **Not in the registry:** Ollama has no web page, so no vhost, dashboard tile or
   certificate name. The browser chat (a later round) brings its tile.

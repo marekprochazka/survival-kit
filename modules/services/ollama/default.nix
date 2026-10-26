@@ -17,7 +17,6 @@ in
       port = 11434;
       # loadModels stays empty: pulling at boot needs internet (offline box)
     };
-    # the CLI; it talks to 127.0.0.1:11434 by default
-    environment.systemPackages = [ config.services.ollama.package ];
+    # the nixpkgs module also installs the ollama CLI (it talks to 127.0.0.1:11434)
   };
 }

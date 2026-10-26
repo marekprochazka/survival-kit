@@ -8,7 +8,7 @@ let
   info = pkgs.closureInfo { rootPaths = [ lite.config.system.build.toplevel ]; };
 in
 pkgs.runCommand "lite-closure" { } ''
-  if grep -- '-ollama-' ${info}/store-paths; then
+  if grep -- '-ollama' ${info}/store-paths; then # the package, its unit, …
     echo "FAIL: the lite system contains the store paths above" >&2
     exit 1
   fi
