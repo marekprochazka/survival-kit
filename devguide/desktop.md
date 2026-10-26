@@ -26,10 +26,13 @@ Nothing in this module writes to anyone's home directory.
 
 `programs.firefox.policies` (enterprise policies): homepage `http://deck` (not locked),
 telemetry/studies/Pocket/sponsored content off, no first-run pages, no default-browser
-prompt, no onboarding popups. Preferences:
+prompt, no onboarding popups, no captive-portal probes or link prefetching
+(`CaptivePortal`, `NetworkPrediction`). Preferences:
 
 - `browser.fixup.domainsuffixwhitelist.deck = true` — so typing `wiki.deck` opens the site
   instead of a web search.
+- `browser.fixup.domainwhitelist.deck = true` — typing just `deck` opens the dashboard.
+- `browser.startup.couldRestoreSession.count = -1` — no "Open previous tabs?" bar.
 - `browser.sessionstore.resume_from_crash = false` — after a power cut, start on the
   dashboard, not the old pages.
 
@@ -37,5 +40,6 @@ prompt, no onboarding popups. Preferences:
 
 `/etc/xdg/autostart/survival-kit-dashboard.desktop` runs `open-dashboard.sh`: wait up to
 120 s for `http://deck` to answer (autologin can be faster than nginx), start Firefox, then
-wait up to 60 s for its window and maximize it with `wmctrl` (Firefox has no "start
+wait up to 60 s for its window (matched by window class `Navigator.firefox`) and maximize
+it with `wmctrl` (Firefox has no "start
 maximized" flag). Users can disable it in XFCE's "Session and Startup".

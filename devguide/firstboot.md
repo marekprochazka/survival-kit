@@ -18,14 +18,18 @@ display manager**:
 
 1. Asks for a display name — printable characters only, no `:` or `,` (they would break
    `/etc/passwd`), re-asks otherwise.
-2. Asks for a password twice (`IFS= read -s`: exact, spaces kept, never shown) until both
-   match.
+2. Asks for a password twice (`read -s` into `$REPLY`: exact, spaces kept, never shown)
+   until both match.
 3. Sets the password (`chpasswd`, via stdin only — never on a command line or in a log),
    writes the marker `/var/lib/survival-kit/firstboot-done`, saves the name to
    `/var/lib/survival-kit/display-name`, then sets it (`usermod -c`). A failing name never
    costs the password.
 
+Ctrl+C / Ctrl+\\ / Ctrl+Z are ignored; Ctrl+D (end of input) counts as an empty answer, and
+after three in a row the prompt gives up for now (no marker — it returns at the next start).
+
 Unit details: `ConditionPathExists=!<marker>` (runs until it succeeded once);
+`restartIfChanged = false` (a rebuild never starts it on a running desktop);
 `StandardInput=tty-force` on `/dev/tty1`; the display manager only *wants* it, so a failed
 or interrupted prompt never blocks the desktop (it simply comes back at the next boot).
 Boot is quiet (`quiet`, `systemd.show_status=error`, console log level 3) so status lines

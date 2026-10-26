@@ -14,7 +14,10 @@
     "kiwix-library: skipping unreadable …" in its log — one bad file never takes the wiki
     down.
   - Drop-ins are made world-readable (kiwix-serve runs as an unprivileged dynamic user).
-  - The new catalog is written to a temp file and renamed into place (atomic).
+  - Files in `zims/` that don't end in `.zim` are reported ("kiwix-library: ignoring …")
+    — rename `.ZIM` files, join split `.zimaa`/`.zimab` parts first.
+  - The new catalog is written to a temp file and renamed into place (atomic); the temp
+    file is removed if anything fails.
   - After a successful rebuild it restarts kiwix-serve (`--monitorLibrary` alone misses a
     second change within the same second).
   - kiwix-serve only *wants* kiwix-library: if a rebuild fails, the wiki keeps running on

@@ -9,7 +9,8 @@
 - The result is a plain directory (`index.html`, `style.css`, `status.js`) set as
   `survivalKit.web.dashboardRoot`; nginx serves it on the `deck` vhost.
 - **Works without JavaScript** — tiles are plain links.
-- `status.js` adds the dots: every 15 s it fetches `/health/<name>` for each service tile
+- `status.js` adds the dots (`role="img"` with an `aria-label`, so screen readers announce
+  the state; `aria-busy` while re-checking): every 15 s it fetches `/health/<name>` for each service tile
   (same origin, so no CORS issues), 3 s timeout. 2xx/3xx → green, anything else → red,
   grey while checking.
 - `style.css`: system fonts, responsive grid, light/dark following the OS setting, no

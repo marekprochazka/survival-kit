@@ -16,9 +16,10 @@ Registry entry fields: `subdomain` (default: the name), `port` (required), `titl
 `description`, `order` (dashboard position, default 100), `healthPath` (default `/`).
 The domain is `survivalKit.web.domain` (default `deck`).
 
-**Build-time checks** (NixOS `assertions` in `web.nix`): the build fails with a clear
-message if two entries share a subdomain or a port, or a subdomain is empty or equals the
-bare domain.
+**Build-time checks** (NixOS `assertions` in `web.nix`): the build fails, naming the
+entries involved, if two entries share a subdomain (case-insensitive) or a port, an entry
+uses port 80/443 (nginx's own), a name or subdomain uses anything but `a-z`, `0-9` and
+`-`, or a subdomain equals the bare domain.
 
 nginx itself always runs (the dashboard is always there). The `deck` vhost is the
 **default** one, so opening the box by IP or `<hostname>.local` shows the dashboard. Port 80

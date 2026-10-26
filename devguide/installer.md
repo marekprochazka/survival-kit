@@ -13,18 +13,23 @@ One GPT disk that boots on **both legacy BIOS and UEFI** machines:
 Options: `survivalKit.disk.device` and `survivalKit.disk.encrypt`. GRUB is installed for both
 `i386-pc` and `x86_64-efi`, the EFI part at the fallback path `EFI/BOOT/BOOTX64.EFI`
 (`efiInstallAsRemovable`) so firmware finds it without a boot entry. disko sets GRUB's
-target disk itself (because of the EF02 partition).
+target disk itself (because of the EF02 partition). The boot menu keeps at most 10
+generations (`configurationLimit`), so the 512 MB ESP can't fill up; older generations
+stay in the store.
 
 ## The installer (`pkgs/survival-kit-install.sh`)
 
 Interactive, 7 steps:
 
-1. Choose a disk — only whole, unmounted disks are offered (not loop/CD/floppy/zram).
+1. Choose a disk — only whole, writable, non-empty, unmounted disks are offered (not
+   loop/CD/floppy/zram, eMMC boot areas, or card readers without a card). Type the name
+   exactly as listed.
 2. Encryption yes/no — disko asks for the passphrase (twice) during step 5.
 3. Confirm — type the disk name, or nothing happens.
 4. Copy this flake (bundled on the ISO) to `/tmp`, write
    `hosts/survival-kit/selection.nix` (disk + encryption) and `hardware-detected.nix`
-   (`nixos-generate-config`, reference only). The disk is recorded by its stable
+   (`nixos-generate-config`, reference only). File modes are kept (scripts stay
+   executable). The disk is recorded by its stable
    `/dev/disk/by-id/…` name, so later bootloader updates can't hit another disk if `/dev/sdX`
    names change.
 5. `disko --mode destroy,format,mount` → the new disk at `/mnt`.

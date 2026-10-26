@@ -11,7 +11,7 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 | Layer | Checks | Speed | Runs |
 |---|---|---|---|
 | Static | `lint` (nixfmt, statix, deadnix) | seconds | pre-commit hook, CI, locally |
-| Config | `eval-*` (disk, web, desktop, install, firstboot, iso) + `firstboot-script`, grouped as `eval` | seconds | CI, locally |
+| Config | `eval-*` (disk, web, desktop, install, firstboot, iso) + `firstboot-script` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
 | VM | `boot`, `services`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
 | Install | installing from the ISO | long | by hand (QEMU / VirtualBox, offline) |
 
@@ -23,7 +23,10 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
   `wait_for_unit`, `succeed("curl …")`, `send_chars` (typing), `wait_until_tty_matches`,
   `screenshot`. VM tests replace the disk layout, so disk/boot are covered by config checks
   and the install test.
-- `firstboot-script` runs the real prompt script with scripted keyboard input and stand-ins
+- `panel-drift` compares our XFCE panel default with XFCE's stock one (minus our plugin);
+  it fails when a nixpkgs update changes the stock layout — re-copy it then.
+- `firstboot-script` runs the real prompt script with scripted keyboard input (incl. a real
+  SIGINT and end-of-input) and stand-ins
   for `usermod`/`chpasswd`.
 
 ## Writing a test
