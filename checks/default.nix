@@ -25,6 +25,7 @@ let
     eval-profiles = import ./eval-profiles.nix args;
     content-unit = import ./content-unit.nix args;
     eval-content = import ./eval-content.nix args;
+    lookup-unit = import ./lookup-unit.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in

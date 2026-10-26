@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:dc="http://purl.org/dc/terms/"
+      xmlns:opds="https://specs.opds.io/opds-1.2"
+      xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">
+  <id>5c5f2340-1661-78b4-8295-81ce86ae4ce5</id>
+
+  <link rel="self"
+        href="/catalog/v2/entries?count=-1"
+        type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
+  <link rel="start"
+        href="/catalog/v2/root.xml"
+        type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+  <link rel="up"
+        href="/catalog/v2/root.xml"
+        type="application/atom+xml;profile=opds-catalog;kind=navigation"/>
+
+  <title>Filtered Entries (count=-1)</title>
+  <updated>2026-10-26T17:58:20Z</updated>
+  <totalResults>2</totalResults>
+  <startIndex>0</startIndex>
+  <itemsPerPage>2</itemsPerPage>
+  <entry>
+    <id>urn:uuid:6471ba0e-dd99-b0ac-6c5b-31f838663e03</id>
+    <title>WikiMed Medical Encyclopedia</title>
+    <updated>2026-10-10T00:00:00Z</updated>
+    <summary>The largest medical encyclopedia, from Wikipedia</summary>
+    <language>eng</language>
+    <name>wikipedia_en_medicine</name>
+    <flavour>mini</flavour>
+    <category>wikipedia</category>
+    <tags>medical;wikipedia;_category:wikipedia;_pictures:no;_videos:no;_details:no;_ftindex:yes</tags>
+    <articleCount>340299</articleCount>
+    <mediaCount>446</mediaCount>
+    <link rel="http://opds-spec.org/image/thumbnail"
+          href="/catalog/v2/illustration/6471ba0e-dd99-b0ac-6c5b-31f838663e03/?size=48"
+          type="image/png;width=48;height=48;scale=1"/>
+    <link type="text/html" href="/content/wikipedia_en_medicine_mini_2026-10" />
+    <author>
+      <name>Wikipedia</name>
+    </author>
+    <publisher>
+      <name>openZIM</name>
+    </publisher>
+    <dc:issued>2026-10-10T00:00:00Z</dc:issued>
+    
+  </entry>
+  <entry>
+    <id>urn:uuid:dd18cc97-a481-e6ee-e475-e2bd49c6b5b9</id>
+    <title>Lua Docs</title>
+    <updated>2026-08-26T00:00:00Z</updated>
+    <summary>Lua documentation, by DevDocs</summary>
+    <language>eng</language>
+    <name>devdocs_en_lua</name>
+    <flavour></flavour>
+    <category></category>
+    <tags>devdocs;lua;_ftindex:no;_pictures:yes;_videos:yes;_details:yes</tags>
+    <articleCount>1</articleCount>
+    <mediaCount>0</mediaCount>
+    <link rel="http://opds-spec.org/image/thumbnail"
+          href="/catalog/v2/illustration/dd18cc97-a481-e6ee-e475-e2bd49c6b5b9/?size=48"
+          type="image/png;width=48;height=48;scale=1"/>
+    <link type="text/html" href="/content/devdocs_en_lua_2026-08" />
+    <author>
+      <name>DevDocs</name>
+    </author>
+    <publisher>
+      <name>openZIM</name>
+    </publisher>
+    <dc:issued>2026-08-26T00:00:00Z</dc:issued>
+    
+  </entry>
+</feed>

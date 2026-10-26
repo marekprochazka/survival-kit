@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/"
+     xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Search: burn treatment</title>
+    <link>/search?pattern=burn%20treatment&amp;books.name=wikipedia_en_medicine_mini_2026-10&amp;format=xml&amp;start=0&amp;pageLength=3</link>
+    <description>Search result for burn treatment</description>
+    <opensearch:totalResults>200</opensearch:totalResults>
+    <opensearch:startIndex>0</opensearch:startIndex>
+    <opensearch:itemsPerPage>3</opensearch:itemsPerPage>
+    <atom:link rel="search" type="application/opensearchdescription+xml" href="/search/searchdescription.xml"/>
+    <opensearch:Query role="request"
+      searchTerms="burn treatment"
+      startIndex="0"
+      count="3"
+    />
+    <item>
+      <title>Burn</title>
+      <link>/content/wikipedia_en_medicine_mini_2026-10/Burn</link>
+        <description><b>Burn</b> This article is about the injury. For other uses, see <b>Burn</b> (disambiguation). <b>Burn</b> Second-degree <b>burn</b> of the hand Specialty Dermatology, critical care medicine, plastic surgery Symptoms First degree: Red without blisters Second degree: Blisters and pain Third degree: Area stiff and not painful Fourth degree: Bone and tendon loss Complications Infection Duration Days to weeks Types First degree, second degree, third degree, fourth degree Causes Heat, cold, electricity, chemicals, friction......</description>
+        <book>
+          <title>WikiMed Medical Encyclopedia</title>
+        </book>
+        <wordCount>635</wordCount>
+    </item>
+    <item>
+      <title>Hydrofluoric acid burn</title>
+      <link>/content/wikipedia_en_medicine_mini_2026-10/Hydrofluoric_acid_burn</link>
+        <description>...<b>burn</b> Hydrofluoric acid <b>burn</b> Other names Hydrofluoric acid toxicity A hydrofluoric acid <b>burn</b> of the hand Specialty Toxicology Symptoms Severe pain at the site of exposure Complications electrolyte, heart, lung, and neurological problems Usual onset Immediate or delayed Causes Hydrofluoric acid Diagnostic method Based on history of exposure and symptoms <b>Treatment</b> Removing contaminated clothing, washing with water, calcium gluconate Frequency Rare A hydrofluoric acid <b>burn</b> is a chemical <b>burn</b> from......</description>
+        <book>
+          <title>WikiMed Medical Encyclopedia</title>
+        </book>
+        <wordCount>215</wordCount>
+    </item>
+    <item>
+      <title>Low-temperature burn</title>
+      <link>/content/wikipedia_en_medicine_mini_2026-10/Low-temperature_burn</link>
+        <description>...<b>burn</b> Other names Low-heat <b>burn</b>, low-temperature scald, slow contact <b>burn</b> Specialty <b>Burn</b> surgery / dermatology Symptoms Redness, blistering, deep dermal injury Complications Infection, delayed healing, hypertrophic scarring, contracture Causes Prolonged contact with moderately heated surfaces/devices Risk factors Elderly age, neuropathy, reduced sensation, use of heating devices during sleep <b>Treatment</b> Cooling, dressings, debridement, skin grafting Low-temperature <b>burn</b> (also called low-heat <b>burn</b>......</description>
+        <book>
+          <title>WikiMed Medical Encyclopedia</title>
+        </book>
+        <wordCount>131</wordCount>
+    </item>
+  </channel>
+</rss>
