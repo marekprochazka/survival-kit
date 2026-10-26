@@ -46,5 +46,8 @@
     enable = true;
     efiSupport = true;
     efiInstallAsRemovable = true;
+    # each generation's kernel+initrd is ~45 MB on the 512 MB ESP; older
+    # generations stay in the Nix store (rollback via nixos-rebuild still works)
+    configurationLimit = 10;
   };
 }

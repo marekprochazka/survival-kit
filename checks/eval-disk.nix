@@ -33,4 +33,7 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   grub.devices == [ "/dev/vda" ]
 ) "GRUB installs to the target disk (set by disko)";
+assert lib.assertMsg (
+  grub.configurationLimit == 10
+) "keep at most 10 generations in the boot menu so the 512 MB ESP can't fill up";
 pkgs.runCommand "eval-disk" { } "touch $out"
