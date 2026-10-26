@@ -19,12 +19,19 @@
 
   # Start the installer on tty1, once per boot. Ctrl+C or finishing → a normal
   # shell; the other consoles (Alt+F2…) are plain shells for troubleshooting.
+  # (trap: Ctrl+C would otherwise also abort the rest of the shell's startup files)
   programs.bash.loginShellInit = ''
     if [[ $(tty) == /dev/tty1 && $USER == nixos && ! -e /tmp/.survival-kit-installer-started ]]; then
       touch /tmp/.survival-kit-installer-started
+      trap ':' INT
       sudo survival-kit-install || true
+      trap - INT
     fi
   '';
+
+  # survival-kit installs ext4 (optionally in LUKS) — no ZFS needed on the ISO:
+  # smaller image, and no ZFS import warning
+  boot.supportedFilesystems.zfs = lib.mkForce false;
   services.getty.helpLine = ''
 
     survival-kit installer: run `sudo survival-kit-install` to (re)start it.

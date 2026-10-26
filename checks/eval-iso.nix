@@ -28,4 +28,9 @@ assert lib.assertMsg (lib.elem target (
 )) "ISO must carry the prebuilt target system (offline install)";
 assert lib.assertMsg (lib.hasInfix "survival-kit-install" iso.programs.bash.loginShellInit)
   "ISO must start the installer on tty1";
+assert lib.assertMsg (
+  !(iso.boot.supportedFilesystems.zfs or false)
+) "ISO needs no ZFS support (smaller image, no forceImportRoot warning)";
+assert lib.assertMsg (lib.hasInfix "trap" iso.programs.bash.loginShellInit)
+  "Ctrl+C in the auto-started installer must not abort the login shell's setup";
 pkgs.runCommand "eval-iso" { } "touch $out"
