@@ -26,6 +26,7 @@ let
     content-unit = import ./content-unit.nix args;
     eval-content = import ./eval-content.nix args;
     lookup-unit = import ./lookup-unit.nix args;
+    chat-unit = import ./chat-unit.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
