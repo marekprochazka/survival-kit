@@ -8,13 +8,15 @@ The repository (on an installed box: `/etc/nixos`):
 | `flake.lock` | Exact pinned versions of the inputs — same lock, same system |
 | `hosts/survival-kit/default.nix` | The installed system: which modules, the account, the bootloader |
 | `hosts/survival-kit/disko.nix` | Disk layout (partitions, optional encryption) as options |
-| `hosts/survival-kit/selection.nix` | *Only on installed boxes:* disk + encryption chosen at install |
+| `hosts/survival-kit/selection.nix` | *Only on installed boxes:* disk, encryption and profile chosen at install |
 | `hosts/survival-kit/hardware-detected.nix` | *Only on installed boxes:* detected hardware, reference only |
 | `hosts/installer/default.nix` | The live installer ISO |
 | `modules/base/` | Network, mDNS, locale, Nix settings, hardware drivers, git trust |
 | `modules/services/web.nix` | The service **registry** and what it generates (nginx, hosts, health) |
 | `modules/tls/` | HTTPS: the box's certificate authority and site certificate, made at boot |
 | `modules/services/vaultwarden/` | Passwords: the Vaultwarden service |
+| `modules/services/ollama/` | Local AI (full profile): the Ollama service + CLI |
+| `modules/profiles/` | lite/full: which services a box gets |
 | `modules/services/kiwix/` | The offline wiki: service, catalog rebuild, bundled books |
 | `modules/dashboard/` | The dashboard page generator, its CSS and status script |
 | `modules/desktop/` | XFCE, autologin, Firefox, XFCE defaults (`xfconf/`), dashboard autostart |

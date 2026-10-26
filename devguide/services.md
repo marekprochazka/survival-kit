@@ -53,8 +53,9 @@ Example: a service `notes` that listens on port 3000.
         }
 
 2. Add `./notes` to the `imports` in `modules/services/default.nix`.
-3. Enable it in `hosts/survival-kit/default.nix`:
-   `survivalKit.services.notes.enable = true;`
+3. Put it in a profile, in `modules/profiles/default.nix`:
+   `notes.enable = lib.mkDefault true;` (or `lib.mkDefault (profile == "full")` for a
+   heavy one) — see [Profiles](profiles.html).
 4. Rebuild. You get `https://notes.deck` (with the name added to the certificate), a hosts
    entry, a health endpoint and a dashboard tile — without touching `web.nix` or the dashboard.
 5. Add a test: a subtest in `checks/services.nix` (or a new VM test) that the service

@@ -23,7 +23,8 @@ the box carries the finished system, not the tools to build new parts of it.
 
 ## Files the installer wrote
 
-- `hosts/survival-kit/selection.nix` — your install choices (disk, encryption).
+- `hosts/survival-kit/selection.nix` — your install choices (disk, encryption, profile).
+  The profile can't be switched by editing it — reinstall from the ISO instead.
 - `hosts/survival-kit/hardware-detected.nix` — what the installer detected about
   this machine. **Reference only**: survival-kit ships drivers for most hardware
   instead. To use the detected settings, add `./hardware-detected.nix` to the

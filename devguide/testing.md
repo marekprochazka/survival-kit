@@ -11,8 +11,9 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 | Layer | Checks | Speed | Runs |
 |---|---|---|---|
 | Static | `lint` (nixfmt, statix, deadnix) | seconds | pre-commit hook, CI, locally |
-| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden) + `firstboot-script` + `tls-script` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
+| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles) + `firstboot-script` + `tls-script` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
 | VM | `boot`, `services`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
+| Closure | `lite-closure` (no Ollama anywhere in a lite system) | minutes (builds lite) | locally |
 | Install | installing from the ISO | long | by hand (QEMU / VirtualBox, offline) |
 
 - **Config checks** evaluate the system and `assert` facts about it (e.g. "with encryption,

@@ -6,6 +6,11 @@
 | <https://wiki.deck> | Wiki — offline encyclopedias and documentation (Kiwix) |
 | <https://vault.deck> | Passwords — offline password manager (see [Passwords](passwords.html)) |
 
+**lite or full.** The box was installed as one of two *profiles*: **lite** (the above —
+for machines with little memory or a slow processor) or **full** (adds local
+[AI models](ai-models.html); needs at least 8 GB of RAM). The profile is chosen at install;
+to change it, reinstall from the ISO — back up your data first.
+
 These addresses work on this box itself. Reaching them from other devices
 (phones, laptops) comes with the planned Wi-Fi hub mode.
 

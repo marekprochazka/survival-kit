@@ -16,15 +16,18 @@ needed.
 Working prototype, tested in QEMU and VirtualBox (not yet on real hardware).
 
 - Installer ISO: boots via BIOS, UEFI and USB, installs **offline**, optional disk
-  encryption.
+  encryption, profile **lite** (low-spec machines) or **full** (adds local AI).
 - First start asks for your name and a password; then the XFCE desktop logs in
   automatically and Firefox opens the dashboard.
-- Dashboard at `http://deck`, with a live status dot per service.
-- Offline wiki (Kiwix) at `http://wiki.deck` with the Arch Wiki, man pages, Nix/bash/git
+- Everything over HTTPS with a certificate authority made on the box (Firefox trusts it).
+- Dashboard at `https://deck`, with a live status dot per service.
+- Offline wiki (Kiwix) at `https://wiki.deck` with the Arch Wiki, man pages, Nix/bash/git
   docs and a built-in user manual.
+- Password manager (Vaultwarden) at `https://vault.deck`.
+- `full` only: local AI models (Ollama, CPU) in the terminal; models come from a USB stick.
 
-Not yet: more services (password manager, file sync, offline maps, local LLM, …),
-light/full profiles, importing content from USB drives, Wi-Fi hotspot mode, updates.
+Not yet: more services (file sync, offline maps, notes, media, …), importing content from
+USB drives, a chat page for the AI, Wi-Fi hotspot mode, updates.
 
 ## Try it
 
@@ -52,7 +55,7 @@ medium, switch on again.
 |---|---|
 | `flake.nix` | the two systems: `survival-kit` (installed) and `installer` (ISO) |
 | `hosts/` | per-system settings |
-| `modules/` | base system, services (web registry, Kiwix), dashboard, desktop, first boot, installer |
+| `modules/` | base system, profiles, services (web registry, Kiwix, Vaultwarden, Ollama), HTTPS, dashboard, desktop, first boot, installer |
 | `pkgs/` | the installer script, the wiki book builder |
 | `manual/` | end-user manual (shipped as a book in the offline wiki) |
 | `devguide/` | developer guide — how everything works and how to change it (also a wiki book) |

@@ -24,10 +24,12 @@ Interactive, 7 steps:
 1. Choose a disk — only whole, writable, non-empty, unmounted disks are offered (not
    loop/CD/floppy/zram, eMMC boot areas, or card readers without a card). Type the name
    exactly as listed.
-2. Encryption yes/no — disko asks for the passphrase (twice) during step 5.
-3. Confirm — type the disk name, or nothing happens.
+2. Encryption yes/no — disko asks for the passphrase (twice) during step 5 — and the
+   [profile](profiles.html): `lite` or `full`, typed exactly (asked again otherwise; no
+   hardware check — the owner decides).
+3. Confirm — shows profile and encryption; type the disk name, or nothing happens.
 4. Copy this flake (bundled on the ISO) to `/tmp`, write
-   `hosts/survival-kit/selection.nix` (disk + encryption) and `hardware-detected.nix`
+   `hosts/survival-kit/selection.nix` (disk, encryption, profile) and `hardware-detected.nix`
    (`nixos-generate-config`, reference only). File modes are kept (scripts stay
    executable). The disk is recorded by its stable
    `/dev/disk/by-id/…` name, so later bootloader updates can't hit another disk if `/dev/sdX`
@@ -43,7 +45,7 @@ closes `cryptroot`, so it can simply be re-run.
 ## How the install works offline
 
 - The ISO carries (`modules/installer`, `system.extraDependencies`) the complete target
-  system **prebuilt** in two variants (with and without encryption), the disko scripts,
+  system **prebuilt** in four variants (lite/full × with/without encryption), the disko scripts,
   and the **build inputs** of the few things that depend on the disk name (the system's
   top level, GRUB's install script, the disko script). An install then copies almost
   everything and builds about four tiny derivations.

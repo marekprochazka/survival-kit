@@ -9,6 +9,7 @@ desktop itself logs in automatically.
 
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
 - [Passwords](passwords.html) — the offline password manager
+- [AI models](ai-models.html) — local AI in the terminal (full profile)
 - [Adding content](adding-content.html) — more wikis and documents
 - [Rebuilding](rebuilding.html) — changing the system safely
 - [Troubleshooting](troubleshooting.html) — when something doesn't work
