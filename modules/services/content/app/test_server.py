@@ -136,6 +136,17 @@ class Api(unittest.TestCase):
                 server.Ollama(self.zims)._run("create", "x")
         self.assertEqual(str(cm.exception), "Error: invalid file magic")
 
+    def test_ollama_panic_message_is_the_panic_line(self):
+        import subprocess
+        from unittest import mock
+
+        trace = "panic: $HOME is not defined\n\ngoroutine 1 [running]:\n\tgithub.com/ollama/ollama/main.go:12 +0x13\n"
+        done = subprocess.CompletedProcess([], 2, stdout="", stderr=trace)
+        with mock.patch("subprocess.run", return_value=done):
+            with self.assertRaises(RuntimeError) as cm:
+                server.Ollama(self.zims)._run("create", "x")
+        self.assertEqual(str(cm.exception), "panic: $HOME is not defined")
+
     def test_upload_without_length_refused(self):
         conn = urllib.request.urlopen  # noqa: F841 — raw socket keeps Content-Length out
         import http.client

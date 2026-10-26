@@ -259,7 +259,9 @@ class Ollama:
         r = subprocess.run(["ollama", *args], capture_output=True, text=True)
         if r.returncode != 0:
             lines = (r.stderr or r.stdout).strip().splitlines()
-            raise RuntimeError(lines[-1] if lines else "ollama failed")
+            # the useful line: an "Error: …" message or a crash's "panic: …", else the last one
+            useful = [ln for ln in lines if ln.startswith(("Error:", "panic:"))]
+            raise RuntimeError((useful or lines or ["ollama failed"])[0 if useful else -1])
 
     def create(self, name, path):
         modelfile = self.workdir / f".Modelfile-{os.getpid()}-{time.monotonic_ns()}"

@@ -188,6 +188,10 @@ pkgs.testers.runNixOSTest {
         machine.fail(CM + "/api/upload?kind=wiki\\&file=survival-kit.zim -T ${dropinZim}")
         status = machine.succeed(CM + "/api/status")
         assert '"models": []' in status, status
+        # the real `ollama create` path inside the sandboxed service: a junk .gguf must be
+        # rejected by Ollama itself ("Error: …"), not crash the CLI (it needs a $HOME)
+        r = machine.succeed("${curl} -s https://content.deck/api/upload?kind=model\\&file=junk.gguf -T /etc/hostname")
+        assert "could not be added" in r and "panic" not in r and "main.go" not in r, r
         machine.succeed("test -z \"$(ls -A " + ZIMS + "/.incoming)\"")
 
     with subtest("plain http redirects to https"):

@@ -24,4 +24,7 @@ assert lib.assertMsg (
   ]
 ) "the service may write only to its own dir and the wiki's drop-in dir";
 assert lib.assertMsg (svc.environment.OLLAMA == "1") "full: the models section is on";
+assert lib.assertMsg (
+  svc.environment.HOME == "/var/lib/survival-kit/content"
+) "the ollama CLI needs a $HOME (it panics without one); the service's own dir";
 pkgs.runCommand "eval-content" { } "touch $out"

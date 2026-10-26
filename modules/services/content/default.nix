@@ -47,6 +47,8 @@ in
         OLLAMA = if ollama then "1" else "0";
         MODELS_DIR = config.services.ollama.models;
         PYTHONUNBUFFERED = "1";
+        # the ollama CLI panics without a $HOME (it derives ~/.ollama even as a client)
+        HOME = stateDir;
       };
       serviceConfig = {
         ExecStart = "${pkgs.python3}/bin/python3 ${./app}/server.py";
