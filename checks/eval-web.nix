@@ -41,6 +41,22 @@ let
       };
     }
   ];
+  caseDup = withModules [
+    {
+      survivalKit.registry = {
+        a = {
+          subdomain = "notes";
+          port = 9011;
+        };
+        b = {
+          subdomain = "Notes";
+          port = 9012;
+        };
+      };
+    }
+  ];
+  nginxPort = withModules [ { survivalKit.registry.x.port = 80; } ];
+  badName = withModules [ { survivalKit.registry."my notes".port = 9013; } ];
   bareDomain = withModules [
     {
       survivalKit.registry.x = {
@@ -78,4 +94,10 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   base.config.services.kiwix-serve.address == "127.0.0.1"
 ) "kiwix-serve must listen on 127.0.0.1 only";
+assert lib.assertMsg (hasFailure caseDup "duplicate subdomain")
+  "subdomains differing only in case must count as duplicates (DNS is case-insensitive)";
+assert lib.assertMsg (hasFailure dupSubdomain "a, b")
+  "the duplicate message must name the clashing entries";
+assert lib.assertMsg (hasFailure nginxPort "port 80") "ports 80/443 belong to nginx";
+assert lib.assertMsg (hasFailure badName "my notes") "names/subdomains must be [a-z0-9-] only";
 pkgs.runCommand "eval-web" { } "touch $out"

@@ -52,9 +52,28 @@ let
     }
   );
 
-  duplicates = xs: lib.unique (lib.filter (x: lib.count (y: y == x) xs > 1) xs);
+  names = lib.attrNames registry;
   subdomains = lib.mapAttrsToList (_: svc: svc.subdomain) registry;
-  ports = lib.mapAttrsToList (_: svc: svc.port) registry;
+  # keys used by more than one entry, as "key (entry, entry)" — keyOf: entry → string
+  clashes =
+    keyOf:
+    lib.mapAttrsToList (key: users: "${key} (${lib.concatStringsSep ", " users})") (
+      lib.filterAttrs (_: users: lib.length users > 1) (
+        lib.groupBy' (users: name: users ++ [ name ]) [ ] (name: keyOf registry.${name}) names
+      )
+    );
+  subdomainClashes = clashes (svc: lib.toLower svc.subdomain); # DNS ignores case
+  portClashes = clashes (svc: toString svc.port);
+  # safe for URLs, nginx config and /etc/hosts
+  isSafe = s: builtins.match "[a-z0-9-]+" s != null;
+  unsafeNames = lib.filter (name: !(isSafe name && isSafe registry.${name}.subdomain)) names;
+  onNginxPorts = lib.filter (
+    name:
+    lib.elem registry.${name}.port [
+      80
+      443
+    ]
+  ) names;
 in
 {
   options.survivalKit = {
@@ -81,12 +100,20 @@ in
   config = {
     assertions = [
       {
-        assertion = duplicates subdomains == [ ];
-        message = "survivalKit.registry: duplicate subdomain(s): ${toString (duplicates subdomains)}";
+        assertion = subdomainClashes == [ ];
+        message = "survivalKit.registry: duplicate subdomain(s): ${lib.concatStringsSep "; " subdomainClashes}";
       }
       {
-        assertion = duplicates ports == [ ];
-        message = "survivalKit.registry: duplicate port(s): ${toString (duplicates ports)}";
+        assertion = portClashes == [ ];
+        message = "survivalKit.registry: duplicate port(s): ${lib.concatStringsSep "; " portClashes}";
+      }
+      {
+        assertion = onNginxPorts == [ ];
+        message = "survivalKit.registry: port 80/443 is nginx's own — used by: ${lib.concatStringsSep ", " onNginxPorts}";
+      }
+      {
+        assertion = unsafeNames == [ ];
+        message = "survivalKit.registry: names and subdomains may only use a-z, 0-9 and '-': ${lib.concatStringsSep ", " unsafeNames}";
       }
       {
         assertion = lib.all (s: s != "" && s != domain) subdomains;
