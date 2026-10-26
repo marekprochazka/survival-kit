@@ -53,20 +53,23 @@ fi
 
 announce 1 "Choose the target disk"
 candidates=()
-while read -r name type; do
+while read -r name type ro size; do
   [[ $type == disk ]] || continue
   [[ $name == loop* || $name == sr* || $name == zram* || $name == fd* || $name == ram* ]] && continue
+  # read-only (e.g. eMMC boot areas mmcblk0boot0/1) or empty (card reader without a card)
+  [[ $ro == 0 && $size != 0 ]] || continue
   # skip disks with anything mounted — e.g. the USB stick we booted from
-  if lsblk -nro MOUNTPOINTS "/dev/$name" | grep -q .; then continue; fi
+  # (no pipe: a pipe could fail and wrongly count the disk as free)
+  [[ -z $(lsblk -nro MOUNTPOINTS "/dev/$name") ]] || continue
   candidates+=("$name")
-done < <(lsblk -dnro NAME,TYPE)
+done < <(lsblk -dnbro NAME,TYPE,RO,SIZE)
 if ((${#candidates[@]} == 0)); then
   echo "No usable disk found (all disks are in use or none attached)." >&2
   exit 1
 fi
 lsblk -do NAME,SIZE,MODEL,TRAN "${candidates[@]/#//dev/}"
 read -rp "Disk to install to (e.g. ${candidates[0]}): " disk
-printf '%s\n' "${candidates[@]}" | grep -qx -- "$disk" || {
+printf '%s\n' "${candidates[@]}" | grep -qxF -- "$disk" || {
   echo "'$disk' is not one of the listed disks." >&2
   exit 1
 }
@@ -100,7 +103,8 @@ if [[ $answer == [yY]* ]]; then
 fi
 
 announce 3 "Confirm"
-info=$(lsblk -dno SIZE,MODEL "/dev/$disk" | xargs)
+info=$(lsblk -dno SIZE,MODEL "/dev/$disk" | tr -s ' ') # squeeze spaces (xargs chokes on quotes)
+info=${info# }
 echo "ALL DATA ON /dev/$disk ($info) WILL BE ERASED."
 read -rp "Type the disk name ($disk) to continue: " confirm
 [[ $confirm == "$disk" ]] || {
@@ -110,7 +114,10 @@ read -rp "Type the disk name ($disk) to continue: " confirm
 
 announce 4 "Prepare the configuration"
 work=$(mktemp -d /tmp/survival-kit.XXXXXX)
-cp -r --no-preserve=mode,ownership "$FLAKE_SRC"/. "$work"/
+# keep file modes (executable scripts stay executable), drop store ownership,
+# then make everything writable (store copies are read-only)
+cp -r --no-preserve=ownership "$FLAKE_SRC"/. "$work"/
+chmod -R u+w "$work"
 host="$work/hosts/survival-kit"
 cat >"$host/selection.nix" <<EOF
 # Written by survival-kit-install on $(date -I). Edit + rebuild to change

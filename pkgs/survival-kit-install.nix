@@ -6,7 +6,6 @@
   util-linux,
   cryptsetup,
   gnugrep,
-  findutils,
   git,
   nixos-install-tools,
   disko,
@@ -19,7 +18,6 @@ writeShellApplication {
     util-linux # lsblk, mountpoint, umount
     cryptsetup # close a leftover cryptroot
     gnugrep
-    findutils # xargs
     git
     nixos-install-tools # nixos-install, nixos-generate-config
     disko
