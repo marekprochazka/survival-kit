@@ -6,6 +6,6 @@ pkgs.runCommand "chat-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   cp -r ${../modules/services/chat/app} app
   chmod -R u+w app
   cd app
-  python3 -m unittest -v test_chat 2>&1
+  python3 -m unittest -v test_chat test_server 2>&1
   touch $out
 ''
