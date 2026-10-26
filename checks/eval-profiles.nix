@@ -26,6 +26,9 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   !lite.services.ollama.enable && !(hasOllamaPkg lite) && !(lite.systemd.services ? ollama)
 ) "lite: no ollama service, no ollama package";
+assert lib.assertMsg (
+  (svc lite).content.enable && lite.systemd.services.survival-kit-content.environment.OLLAMA == "0"
+) "lite: the content manager is on, without the models section";
 assert lib.assertMsg liteOllama.services.ollama.enable
   "a hand override (lite + ollama.enable = true) must win over the profile default";
 pkgs.runCommand "eval-profiles" { } "touch $out"

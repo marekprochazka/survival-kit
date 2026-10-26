@@ -26,6 +26,9 @@ let
       '';
   dropinZim = mkTestZim "dropin-test";
   privateZim = mkTestZim "private-test";
+  # own books for the content manager (Kiwix lists a book once per internal ID)
+  cmZim = mkTestZim "cm-test";
+  replaceZim = mkTestZim "cm-replace";
   # every https request trusts the box's own CA (as Firefox does via policy)
   curl = "curl --cacert /var/lib/survival-kit/tls/ca.crt";
 in
@@ -35,6 +38,8 @@ pkgs.testers.runNixOSTest {
   nodes.machine = {
     imports = [ (import ./host-node.nix { inherit inputs; }) ];
     environment.systemPackages = [ pkgs.openssl ]; # test-only: inspect certificates
+    # the content manager always keeps ≥ 2 GiB free; the default 1 GB test disk can't
+    virtualisation.diskSize = 4096;
   };
   testScript = ''
     STARTER_BOOKS = 7  # bundled ZIMs; raised as starter content lands
@@ -155,6 +160,35 @@ pkgs.testers.runNixOSTest {
         machine.succeed("curl -sf http://127.0.0.1:11434/api/version | grep -q version")
         # the CLI as the owner, against the system service; no model yet → empty list
         machine.succeed("su - deck -c 'ollama list'")
+
+    with subtest("Content manager: import, replace a built-in, delete"):
+        CM = "${curl} -sf https://content.deck"
+        machine.wait_until_succeeds(CM + "/health")
+
+        def upload(name, src):
+            # -s without -f: on a refusal the service's message ends up in the test log
+            r = machine.succeed("${curl} -s https://content.deck/api/upload?kind=wiki\\&file=" + name + " -T " + src)
+            assert '"result"' in r, r
+
+        n = books()
+        # a Kiwix-style dated name is stored under its clean name
+        upload("cm-test_2026-01.zim", "${cmZim}")
+        wait_books(n + 1)
+        machine.succeed("test -f " + ZIMS + "/cm-test.zim")
+        machine.succeed(CM + "/api/wiki/cm-test.zim -X DELETE")
+        wait_books(n)
+        # an import named like a built-in book replaces it; deleting brings it back
+        upload("devdocs_en_git.zim", "${replaceZim}")
+        machine.wait_until_succeeds("${curl} -sfL https://wiki.deck/content/devdocs_en_git | grep -q 'cm-replace test page'")
+        assert books() == n, "a replaced built-in must not count twice"
+        machine.succeed(CM + "/api/wiki/devdocs_en_git.zim -X DELETE")
+        machine.wait_until_succeeds("! ${curl} -sfL https://wiki.deck/content/devdocs_en_git | grep -q 'cm-replace test page'")
+        wait_books(n)
+        # refusals and the models section (full)
+        machine.fail(CM + "/api/upload?kind=wiki\\&file=survival-kit.zim -T ${dropinZim}")
+        status = machine.succeed(CM + "/api/status")
+        assert '"models": []' in status, status
+        machine.succeed("test -z \"$(ls -A " + ZIMS + "/.incoming)\"")
 
     with subtest("plain http redirects to https"):
         for url in ["http://wiki.deck/", "http://deck/", "http://127.0.0.1/"]:

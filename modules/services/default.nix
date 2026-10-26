@@ -6,5 +6,6 @@
     ./kiwix
     ./vaultwarden
     ./ollama
+    ./content
   ];
 }

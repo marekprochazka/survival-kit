@@ -22,6 +22,7 @@ in
   config.survivalKit.services = {
     kiwix.enable = lib.mkDefault true;
     vaultwarden.enable = lib.mkDefault true;
+    content.enable = lib.mkDefault true; # the content manager (both profiles)
     ollama.enable = lib.mkDefault (profile == "full");
   };
 }

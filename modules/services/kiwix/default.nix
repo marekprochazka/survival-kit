@@ -32,9 +32,17 @@ in
       default = true;
       description = "Bundle the starter ZIMs (Linux/Nix docs, survival-kit manual) in the image.";
     };
+    starterDir = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      internal = true; # set by this module
+      description = "The built-in books (for the content manager); null without starter content.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
+    survivalKit.services.kiwix.starterDir = lib.mkIf cfg.starterContent starterDir;
+
     services.kiwix-serve = {
       enable = true;
       address = "127.0.0.1";
@@ -80,6 +88,11 @@ in
         done
         ${lib.optionalString cfg.starterContent ''
           for zim in ${starterDir}/*.zim; do
+            # an imported book with the same name replaces the built-in (content manager)
+            if [[ -e ${dataDir}/zims/$(basename "$zim") ]]; then
+              echo "kiwix-library: built-in $(basename "$zim" .zim) replaced by import"
+              continue
+            fi
             kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2
           done
         ''}

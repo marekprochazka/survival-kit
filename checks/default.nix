@@ -24,6 +24,7 @@ let
     eval-ollama = import ./eval-ollama.nix args;
     eval-profiles = import ./eval-profiles.nix args;
     content-unit = import ./content-unit.nix args;
+    eval-content = import ./eval-content.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
