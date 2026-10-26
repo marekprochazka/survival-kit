@@ -14,6 +14,13 @@ let
 
   fqdn = svc: "${svc.subdomain}.${domain}";
   upstream = svc: "http://127.0.0.1:${toString svc.port}";
+  # every vhost: HTTPS with the box's own certificate (modules/tls); plain http
+  # answers 301 → https, so old links and typed names keep working
+  tlsVhost = {
+    forceSSL = true;
+    sslCertificate = "${config.survivalKit.tls.dir}/deck.crt";
+    sslCertificateKey = "${config.survivalKit.tls.dir}/deck.key";
+  };
 
   entryType = types.submodule (
     { name, ... }:
@@ -22,7 +29,7 @@ let
         subdomain = mkOption {
           type = types.str;
           default = name;
-          description = "Served at http://<subdomain>.<domain>.";
+          description = "Served at https://<subdomain>.<domain>.";
         };
         port = mkOption {
           type = types.port;
@@ -81,13 +88,13 @@ in
       domain = mkOption {
         type = types.str;
         default = "deck";
-        description = "Local domain: dashboard at http://<domain>, services at http://<sub>.<domain>.";
+        description = "Local domain: dashboard at https://<domain>, services at https://<sub>.<domain>.";
       };
       dashboardRoot = mkOption {
         type = types.path;
         default = pkgs.writeTextDir "index.html" "<h1>survival-kit</h1>";
         defaultText = lib.literalMD "a placeholder page";
-        description = "Directory served at http://<domain> (set by the dashboard module).";
+        description = "Directory served at https://<domain> (set by the dashboard module).";
       };
     };
     registry = mkOption {
@@ -124,8 +131,9 @@ in
     services.nginx = {
       enable = true;
       recommendedProxySettings = true;
+      recommendedTlsSettings = true; # modern protocols/ciphers, session cache
       virtualHosts = {
-        ${domain} = {
+        ${domain} = tlsVhost // {
           default = true; # catch-all: access by IP lands on the dashboard
           serverAliases = [ "${config.networking.hostName}.local" ];
           root = web.dashboardRoot;
@@ -139,8 +147,15 @@ in
         };
       }
       // lib.mapAttrs' (
-        _: svc: lib.nameValuePair (fqdn svc) { locations."/".proxyPass = upstream svc; }
+        _: svc: lib.nameValuePair (fqdn svc) (tlsVhost // { locations."/".proxyPass = upstream svc; })
       ) registry;
+    };
+
+    # the certificate must exist before nginx loads it. Requires: a re-issue (new
+    # service → new name → the TLS unit restarts on switch) restarts nginx too.
+    systemd.services.nginx = {
+      after = [ "survival-kit-tls.service" ];
+      requires = [ "survival-kit-tls.service" ];
     };
 
     # Local name resolution for the box itself; dnsmasq (AP-hub round) will

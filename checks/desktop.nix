@@ -89,7 +89,7 @@ pkgs.testers.runNixOSTest {
         # open a wiki page in the running Firefox (remote open goes via the session bus)
         machine.succeed(
             "su - deck -c 'DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/"
-            + uid + "/bus firefox http://wiki.deck/ >&2 &'"
+            + uid + "/bus firefox https://wiki.deck/ >&2 &'"
         )
         machine.wait_until_succeeds(
             "DISPLAY=:0 wmctrl -l -x | grep Navigator.firefox | grep -v 'survival-kit — Mozilla Firefox'",

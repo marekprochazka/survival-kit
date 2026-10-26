@@ -36,6 +36,7 @@ let
       CA_SUBJECT=${lib.escapeShellArg "survival-kit local CA (${hostName})"}
       PERMITTED=${lib.escapeShellArg (lib.concatStringsSep " " permitted)}
       NAMES=${lib.escapeShellArg (lib.concatStringsSep " " names)}
+      KEY_GROUP=${lib.escapeShellArg (lib.optionalString config.services.nginx.enable config.services.nginx.group)}
     ''
     + builtins.readFile ./tls.sh;
   };

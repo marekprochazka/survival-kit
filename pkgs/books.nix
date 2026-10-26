@@ -10,7 +10,7 @@
 let
   mkBook =
     {
-      name, # book name = URL: http://wiki.<domain>/content/<name>
+      name, # book name = URL: https://wiki.<domain>/content/<name>
       title,
       description,
       src,

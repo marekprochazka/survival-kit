@@ -1,4 +1,4 @@
-# Kiwix — offline wikis/docs (ZIM files) at http://wiki.<domain>.
+# Kiwix — offline wikis/docs (ZIM files) at https://wiki.<domain>.
 # Catalog is runtime state: kiwix-library rebuilds library.xml at every boot
 # from the drop-in dir, so new ZIMs need no rebuild (ADR-0004 fills zims/).
 {
@@ -110,13 +110,13 @@ in
         manual = {
           title = "Manual";
           description = "How to use and maintain this box";
-          url = "http://wiki.${config.survivalKit.web.domain}/content/survival-kit";
+          url = "https://wiki.${config.survivalKit.web.domain}/content/survival-kit";
           order = 20;
         };
         devguide = {
           title = "Developer guide";
           description = "How survival-kit is built, and how to change it";
-          url = "http://wiki.${config.survivalKit.web.domain}/content/survival-kit-dev";
+          url = "https://wiki.${config.survivalKit.web.domain}/content/survival-kit-dev";
           order = 30;
         };
       };

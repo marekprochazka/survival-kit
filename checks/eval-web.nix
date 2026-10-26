@@ -100,4 +100,14 @@ assert lib.assertMsg (hasFailure dupSubdomain "a, b")
   "the duplicate message must name the clashing entries";
 assert lib.assertMsg (hasFailure nginxPort "port 80") "ports 80/443 belong to nginx";
 assert lib.assertMsg (hasFailure badName "my notes") "names/subdomains must be [a-z0-9-] only";
+assert lib.assertMsg (lib.all (
+  v:
+  v.forceSSL
+  && v.sslCertificate == "/var/lib/survival-kit/tls/deck.crt"
+  && v.sslCertificateKey == "/var/lib/survival-kit/tls/deck.key"
+) (lib.attrValues vhosts)) "every vhost: https only (http → 301), with the box's certificate";
+assert lib.assertMsg (
+  lib.elem "survival-kit-tls.service" base.config.systemd.services.nginx.requires
+  && lib.elem "survival-kit-tls.service" base.config.systemd.services.nginx.after
+) "nginx needs the certificate first (and restarts when it is re-issued)";
 pkgs.runCommand "eval-web" { } "touch $out"

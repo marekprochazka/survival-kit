@@ -4,7 +4,7 @@
 { pkgs, ... }:
 pkgs.runCommand "tls-script" { nativeBuildInputs = [ pkgs.openssl ]; } ''
   run() {
-    TLS_DIR=$PWD/tls CA_SUBJECT="test CA" PERMITTED="deck .deck box.local" NAMES="$1" \
+    TLS_DIR=$PWD/tls CA_SUBJECT="test CA" PERMITTED="deck .deck box.local" NAMES="$1" KEY_GROUP=$(id -gn) \
       bash -euo pipefail ${../modules/tls/tls.sh}
   }
   fail() { echo "FAIL: $*"; exit 1; }
@@ -27,7 +27,8 @@ pkgs.runCommand "tls-script" { nativeBuildInputs = [ pkgs.openssl ]; } ''
   res=$(run "deck wiki.deck vault.deck box.local")
   grep -q "issued the site certificate" <<<"$res" || fail "mismatched key must re-issue"
 
-  [[ $(stat -c %a tls/ca.key) == 600 && $(stat -c %a tls/deck.key) == 600 ]] || fail "keys must be 0600"
+  [[ $(stat -c %a tls/ca.key) == 600 ]] || fail "the CA key must be 0600"
+  [[ $(stat -c '%a %G' tls/deck.key) == "640 $(id -gn)" ]] || fail "the site key must be 0640, group KEY_GROUP"
   # (find, not a glob: the build environment sets nullglob)
   [[ -z $(find tls -maxdepth 1 -name '.work.*') ]] || fail "temp dir left behind"
   touch $out

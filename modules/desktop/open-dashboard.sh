@@ -5,10 +5,11 @@
 # 2. Start Firefox (its homepage is the dashboard, set by policy).
 # 3. Firefox has no "start maximized" flag: wait (≤60 s) for its window and ask
 #    the window manager to maximize it. On timeout just leave it as is.
-url="${1:-http://deck}"
+url="${1:-https://deck}"
+ca="${2:-/var/lib/survival-kit/tls/ca.crt}" # curl doesn't know the box's CA either
 
 for _ in $(seq 1 120); do
-  curl -sf -o /dev/null "$url" && break
+  curl -sf --cacert "$ca" -o /dev/null "$url" && break
   sleep 1
 done
 

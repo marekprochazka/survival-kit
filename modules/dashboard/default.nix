@@ -1,4 +1,4 @@
-# Dashboard at http://<domain> (ADR-0002 §5): static HTML rendered at build
+# Dashboard at https://<domain> (ADR-0002 §5): static HTML rendered at build
 # time from the service registry + extra links. Works without JS; status.js
 # only adds live up/down dots via the same-origin /health/<name> endpoints.
 {
@@ -17,7 +17,7 @@ let
   serviceTiles = lib.mapAttrsToList (name: svc: {
     inherit name;
     inherit (svc) title description order;
-    url = "http://${svc.subdomain}.${domain}/";
+    url = "https://${svc.subdomain}.${domain}/";
     health = "/health/${name}";
   }) registry;
   linkTiles = lib.mapAttrsToList (name: link: {

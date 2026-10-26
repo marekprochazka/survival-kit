@@ -3,8 +3,8 @@
 #   CA:   created once, never replaced automatically (that would break trust).
 #   site: re-issued when missing, when the wanted names changed, when it isn't valid
 #         for the current clock, or when key and certificate don't belong together.
-# Inputs (prepended by the module): TLS_DIR, CA_SUBJECT, PERMITTED, NAMES
-# (PERMITTED/NAMES are space-separated DNS names).
+# Inputs (prepended by the module): TLS_DIR, CA_SUBJECT, PERMITTED, NAMES, KEY_GROUP
+# (PERMITTED/NAMES are space-separated DNS names; KEY_GROUP may read deck.key, "" = root only).
 
 install -d -m 0755 "$TLS_DIR"
 umask 077 # everything created from here on is root-only unless chmod'ed
@@ -56,4 +56,11 @@ if ! site_ok; then
   mv "$work/deck.key" "$TLS_DIR/deck.key"
   mv "$work/deck.crt" "$TLS_DIR/deck.crt"
   echo "survival-kit-tls: issued the site certificate for: $NAMES"
+fi
+
+# the web server runs unprivileged and must read the site key (not the CA key);
+# set on every run, so wrong ownership repairs itself
+if [[ -n $KEY_GROUP ]]; then
+  chgrp "$KEY_GROUP" "$TLS_DIR/deck.key"
+  chmod 0640 "$TLS_DIR/deck.key"
 fi

@@ -16,7 +16,7 @@ let
     lib.nameValuePair "xdg/xfce4/xfconf/xfce-perchannel-xml/${file}" { source = ./xfconf + "/${file}"; }
   ) (builtins.readDir ./xfconf);
 
-  dashboardUrl = "http://${config.survivalKit.web.domain}";
+  dashboardUrl = "https://${config.survivalKit.web.domain}";
   openDashboard = pkgs.writeShellApplication {
     name = "survival-kit-open-dashboard";
     runtimeInputs = with pkgs; [
@@ -75,6 +75,9 @@ in
           URL = dashboardUrl;
           StartPage = "homepage";
         };
+        # trust the box's own certificate authority (made at boot, modules/tls);
+        # read at every Firefox start
+        Certificates.Install = [ "${config.survivalKit.tls.dir}/ca.crt" ];
         DisableTelemetry = true;
         DisableFirefoxStudies = true;
         DisablePocket = true;
@@ -116,7 +119,7 @@ in
         Type=Application
         Name=survival-kit dashboard
         Comment=Open the dashboard in Firefox at login
-        Exec=${lib.getExe openDashboard} ${dashboardUrl}
+        Exec=${lib.getExe openDashboard} ${dashboardUrl} ${config.survivalKit.tls.dir}/ca.crt
         OnlyShowIn=XFCE;
       '';
     };

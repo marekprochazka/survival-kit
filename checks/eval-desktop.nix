@@ -29,7 +29,7 @@ assert lib.assertMsg (lib.all
 ) "xfconf defaults must be installed under /etc/xdg";
 assert lib.assertMsg cfg.programs.firefox.enable "firefox must be enabled";
 assert lib.assertMsg (
-  cfg.programs.firefox.policies.Homepage.URL == "http://deck"
+  cfg.programs.firefox.policies.Homepage.URL == "https://deck"
 ) "firefox homepage must be the dashboard";
 assert lib.assertMsg (
   cfg.programs.firefox.preferences."browser.fixup.domainsuffixwhitelist.deck" == true
@@ -49,4 +49,10 @@ assert lib.assertMsg (
 assert lib.assertMsg (lib.any (
   x: !x.assertion && lib.hasInfix "autoLoginUser" x.message
 ) noSuchUser.assertions) "an autologin user that doesn't exist must fail the build clearly";
+assert lib.assertMsg (
+  cfg.programs.firefox.policies.Certificates.Install == [ "/var/lib/survival-kit/tls/ca.crt" ]
+) "firefox must trust the box's certificate authority";
+assert lib.assertMsg (lib.hasInfix "https://deck /var/lib/survival-kit/tls/ca.crt"
+  cfg.environment.etc."xdg/autostart/survival-kit-dashboard.desktop".text
+) "the autostart helper must get the https URL and the CA (for its curl)";
 pkgs.runCommand "eval-desktop" { } "touch $out"
