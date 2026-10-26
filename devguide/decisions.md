@@ -31,8 +31,8 @@ updates, an offline build kit, themes.
 - **NixOS manual:** run `nixos-help` (opens it in the browser).
 - **Every NixOS option:** `man configuration.nix` (search with `/`), or
   `nixos-option <option>` for the current value.
-- **Nix language builtins:** [Nix docs in the wiki](http://wiki.deck/content/devdocs_en_nix/index).
+- **Nix language builtins:** [Nix docs in the wiki](https://wiki.deck/content/devdocs_en_nix/index).
 - **nixpkgs `lib` functions** (`mkIf`, `mapAttrs`, …):
-  [nixpkgs lib docs](http://wiki.deck/content/devdocs_en_nix/nixpkgs/stable/index).
+  [nixpkgs lib docs](https://wiki.deck/content/devdocs_en_nix/nixpkgs/stable/index).
 - **Linux in general:** the Arch Wiki and man pages books in the wiki.
 - **This system:** read the code — every module starts with a comment saying what it does.

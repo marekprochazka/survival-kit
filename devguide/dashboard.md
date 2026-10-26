@@ -1,6 +1,6 @@
 # Dashboard
 
-`modules/dashboard/` — the page at `http://deck`.
+`modules/dashboard/` — the page at `https://deck`.
 
 - **Generated at build time** by Nix (`default.nix`): one tile per registry entry plus one
   per `survivalKit.dashboard.links.<name>` (tiles that aren't services, like the Manual and

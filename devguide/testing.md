@@ -11,7 +11,7 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 | Layer | Checks | Speed | Runs |
 |---|---|---|---|
 | Static | `lint` (nixfmt, statix, deadnix) | seconds | pre-commit hook, CI, locally |
-| Config | `eval-*` (disk, web, desktop, install, firstboot, iso) + `firstboot-script` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
+| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden) + `firstboot-script` + `tls-script` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
 | VM | `boot`, `services`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
 | Install | installing from the ISO | long | by hand (QEMU / VirtualBox, offline) |
 
@@ -28,6 +28,12 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 - `firstboot-script` runs the real prompt script with scripted keyboard input (incl. a real
   SIGINT and end-of-input) and stand-ins
   for `usermod`/`chpasswd`.
+- `tls-script` runs the real certificate script in the build sandbox: creates the CA once,
+  keeps it, re-issues the site certificate on new names or a mismatched key.
+- VM tests talk HTTPS like Firefox does: `curl --cacert /var/lib/survival-kit/tls/ca.crt`.
+- **systemd start limit:** a unit started more than 5 times within 10 s is refused
+  (`start-limit-hit`). Tests that restart a unit often can hit it — fix the unit when real
+  use could too (as for `kiwix-library`), not the test.
 
 ## Writing a test
 

@@ -7,9 +7,10 @@ registry, `modules/services/web.nix` generates everything else, so nothing can d
 
 | Generated | From |
 |---|---|
-| nginx vhost `<subdomain>.<domain>` → `http://127.0.0.1:<port>` | each entry |
+| nginx vhost `https://<subdomain>.<domain>` → `http://127.0.0.1:<port>` (http → 301, WebSockets passed through) | each entry |
 | `/etc/hosts`: `127.0.0.1 deck <subdomain>.deck …` | each entry |
-| `http://deck/health/<name>` → the service's `healthPath` | each entry |
+| `https://deck/health/<name>` → the service's `healthPath` | each entry |
+| the name `<subdomain>.deck` in the site certificate (see [HTTPS](tls.html)) | each entry |
 | a dashboard tile | each entry (see [Dashboard](dashboard.html)) |
 
 Registry entry fields: `subdomain` (default: the name), `port` (required), `title`,
@@ -22,8 +23,8 @@ uses port 80/443 (nginx's own), a name or subdomain uses anything but `a-z`, `0-
 `-`, or a subdomain equals the bare domain.
 
 nginx itself always runs (the dashboard is always there). The `deck` vhost is the
-**default** one, so opening the box by IP or `<hostname>.local` shows the dashboard. Port 80
-is closed to other machines by the firewall (opening it is future "hub mode" work).
+**default** one, so opening the box by IP or `<hostname>.local` shows the dashboard. Ports 80
+and 443 are closed to other machines by the firewall (opening it is future "hub mode" work).
 
 ## Adding a service — step by step
 
@@ -54,10 +55,14 @@ Example: a service `notes` that listens on port 3000.
 2. Add `./notes` to the `imports` in `modules/services/default.nix`.
 3. Enable it in `hosts/survival-kit/default.nix`:
    `survivalKit.services.notes.enable = true;`
-4. Rebuild. You get `http://notes.deck`, a hosts entry, a health endpoint and a dashboard
-   tile — without touching `web.nix` or the dashboard.
+4. Rebuild. You get `https://notes.deck` (with the name added to the certificate), a hosts
+   entry, a health endpoint and a dashboard tile — without touching `web.nix` or the dashboard.
 5. Add a test: a subtest in `checks/services.nix` (or a new VM test) that the service
-   answers at `http://notes.deck` — see [Testing](testing.html).
+   answers at `https://notes.deck` (with `curl --cacert …/ca.crt`) — see [Testing](testing.html).
+
+**Email-shaped logins.** If a service insists on an email address as the login name, the
+box's convention is `<name>@<subdomain>.deck` (e.g. `anna@vault.deck`) — nothing is ever
+mailed. Say so on the service's manual page.
 
 Find the NixOS service options with `man configuration.nix` (search `/services.notes`) or
 `nixos-option services.<name>`.

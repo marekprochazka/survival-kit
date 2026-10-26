@@ -24,7 +24,9 @@ Nothing in this module writes to anyone's home directory.
 
 ## Firefox
 
-`programs.firefox.policies` (enterprise policies): homepage `http://deck` (not locked),
+`programs.firefox.policies` (enterprise policies): homepage `https://deck` (not locked), trust the box's certificate authority
+(`Certificates.Install` → `/var/lib/survival-kit/tls/ca.crt`, read at every start; see
+[HTTPS](tls.html)),
 telemetry/studies/Pocket/sponsored content off, no first-run pages, no default-browser
 prompt, no onboarding popups, captive-portal service off (`CaptivePortal`), DNS prefetching off
 (`NetworkPrediction`). Preferences:
@@ -39,7 +41,7 @@ prompt, no onboarding popups, captive-portal service off (`CaptivePortal`), DNS 
 ## Dashboard autostart
 
 `/etc/xdg/autostart/survival-kit-dashboard.desktop` runs `open-dashboard.sh`: wait up to
-120 s for `http://deck` to answer (autologin can be faster than nginx), start Firefox, then
+120 s for `https://deck` to answer (`curl --cacert` with the box's CA) (autologin can be faster than nginx), start Firefox, then
 wait up to 60 s for its window (matched by window class `Navigator.firefox`) and maximize
 it with `wmctrl` (Firefox has no "start
 maximized" flag). Users can disable it in XFCE's "Session and Startup".

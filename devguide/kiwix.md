@@ -1,6 +1,6 @@
 # Kiwix (the offline wiki)
 
-`modules/services/kiwix/` — the wiki at `http://wiki.deck`, served by `kiwix-serve` from
+`modules/services/kiwix/` — the wiki at `https://wiki.deck`, served by `kiwix-serve` from
 `.zim` files (packaged websites).
 
 ## How it runs
@@ -25,7 +25,7 @@
 
 ## Books and URLs
 
-A book's URL is its **file name**: `x.zim` → `http://wiki.deck/content/x`. Bundled books
+A book's URL is its **file name**: `x.zim` → `https://wiki.deck/content/x`. Bundled books
 are therefore linked under clean names (`pkgs.linkFarm`), not their Nix store paths.
 
 Bundled ("starter content", option `survivalKit.services.kiwix.starterContent`):

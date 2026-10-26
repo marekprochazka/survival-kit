@@ -13,6 +13,8 @@ The repository (on an installed box: `/etc/nixos`):
 | `hosts/installer/default.nix` | The live installer ISO |
 | `modules/base/` | Network, mDNS, locale, Nix settings, hardware drivers, git trust |
 | `modules/services/web.nix` | The service **registry** and what it generates (nginx, hosts, health) |
+| `modules/tls/` | HTTPS: the box's certificate authority and site certificate, made at boot |
+| `modules/services/vaultwarden/` | Passwords: the Vaultwarden service |
 | `modules/services/kiwix/` | The offline wiki: service, catalog rebuild, bundled books |
 | `modules/dashboard/` | The dashboard page generator, its CSS and status script |
 | `modules/desktop/` | XFCE, autologin, Firefox, XFCE defaults (`xfconf/`), dashboard autostart |
