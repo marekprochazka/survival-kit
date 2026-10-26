@@ -14,6 +14,12 @@
   `anna@deck` is refused, `anna@vault.deck` works. The box's convention is
   `<name>@<service address>` (see [Services](services.html)); nothing is ever mailed — there
   is no mail server and no SMTP settings.
+- **Two online-only prompts, documented instead of patched:** the "check known data
+  breaches" box (on by default; a client-side Have I Been Pwned query) and the "install the
+  extension" page (shown once per new account until dismissed). Neither has a server
+  setting: Vaultwarden passes only a fixed list of feature flags (`SUPPORTED_FEATURE_FLAGS`
+  in its `config.rs`). Changing them would mean patching the minified web vault, which
+  breaks with updates.
 - Data: `/var/lib/vaultwarden` (SQLite, mode 0700). Daily backup (timer
   `backup-vaultwarden`, 23:00, `Persistent` → at the next boot if missed): upstream's
   script writes one copy to `/var/backup/vaultwarden/latest`, then our `ExecStartPost`

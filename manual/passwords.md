@@ -6,7 +6,12 @@ box — it works without internet. (It is Vaultwarden, compatible with Bitwarden
 **First use.** Open Passwords and choose **Create account**. As the email address, use
 your name followed by `@vault.deck`, e.g. **`anna@vault.deck`** — it only has to *look*
 like an email; nothing is ever sent to it (see [What's on this box](whats-on-this-box.html)
-for this convention). Then pick a **master password**.
+for this convention). Then pick a **master password**. When creating the account,
+**untick "Check known data breaches for this password"**: that check asks a service on the
+internet, so it can't work here.
+
+After the first login, Passwords offers to install a browser extension. Choose
+**"Add it later"** (or "Skip to web app") — you'll only see this once.
 
 **The master password cannot be recovered.** Your passwords are encrypted with it; nobody
 can open them without it — not even someone with full access to this box. Write it down
