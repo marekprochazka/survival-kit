@@ -5,6 +5,6 @@ pkgs.runCommand "lookup-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   cp -r ${../modules/services/lookup/app} app
   chmod -R u+w app
   cd app
-  python3 -m unittest -v test_lookup 2>&1
+  python3 -m unittest -v test_lookup test_fronts 2>&1
   touch $out
 ''

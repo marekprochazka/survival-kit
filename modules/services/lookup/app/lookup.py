@@ -13,6 +13,8 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 
+_json = json  # model_call's `json=` flag shadows the module inside it
+
 TOP_HITS = 5  # search results kept
 TOP_READ = 3  # articles read
 ARTICLE_CHARS = 4000  # per article, so 3 articles + the conversation fit an 8k context
@@ -222,3 +224,38 @@ class Lookup:
         except (OSError, ET.ParseError) as e:
             self.invalidate()
             return {"plan": None, "hits": [], "articles": [], "error": f"{WIKI_DOWN} ({e})"}
+
+
+# --- the real helpers (tests use stand-ins) -------------------------------------------
+
+
+def http_fetch(url, timeout=30):
+    """GET a Kiwix URL as text (raises OSError when Kiwix is unreachable)."""
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def ollama_call(base):
+    """model_call for Lookup: one non-streamed chat request to the local Ollama."""
+    import urllib.request
+
+    def call(model, messages, json=False):
+        body = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "options": {"temperature": 0.2, "num_ctx": 8192},
+        }
+        if json:
+            body["format"] = "json"
+        req = urllib.request.Request(
+            f"{base.rstrip('/')}/api/chat",
+            data=_json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=600) as r:  # a slow CPU may need minutes
+            return _json.load(r)["message"]["content"]
+
+    return call
