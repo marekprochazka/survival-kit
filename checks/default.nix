@@ -22,6 +22,7 @@ let
     eval-tls = import ./eval-tls.nix args;
     eval-vaultwarden = import ./eval-vaultwarden.nix args;
     eval-ollama = import ./eval-ollama.nix args;
+    eval-profiles = import ./eval-profiles.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
@@ -35,4 +36,5 @@ evalChecks
   services = import ./services.nix args;
   desktop = import ./desktop.nix args;
   firstboot = import ./firstboot.nix args;
+  lite-closure = import ./lite-closure.nix args; # local only: builds the lite system
 }

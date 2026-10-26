@@ -8,21 +8,18 @@
     ../../modules/desktop
     ../../modules/firstboot
     ../../modules/tls
+    ../../modules/profiles
     ./disko.nix
   ]
-  # written by survival-kit-install on installed machines (disk choice);
-  # absent in the dev repo → defaults (/dev/vda, unencrypted)
+  # written by survival-kit-install on installed machines (disk, encryption, profile);
+  # absent in the dev repo → defaults (/dev/vda, unencrypted, full)
   ++ lib.optional (builtins.pathExists ./selection.nix) ./selection.nix;
 
   networking.hostName = "survival-kit";
 
   survivalKit = {
-    # services (no lite/full profiles yet — ADR-0002 profiles come with ≥2 services)
-    services = {
-      kiwix.enable = true;
-      vaultwarden.enable = true;
-      ollama.enable = true;
-    };
+    # which services (modules/profiles); installs set it in selection.nix
+    profile = lib.mkDefault "full";
     desktop = {
       enable = true;
       autoLoginUser = "deck";
