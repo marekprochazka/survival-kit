@@ -44,5 +44,28 @@ pkgs.runCommand "firstboot-script" { } ''
   ${expect "chpasswd [deck:pw]"}
   test -e marker || { echo "marker missing after name failure"; exit 1; }
 
+  echo "== Ctrl+C (SIGINT) during the prompt is ignored"
+  rm -f "$CALLS" marker name
+  mkfifo keys
+  # background jobs start with SIGINT ignored; restore the default like a real tty would
+  FIRSTBOOT_USER=deck FIRSTBOOT_MARKER=$PWD/marker FIRSTBOOT_NAME_FILE=$PWD/name \
+    env --default-signal=INT bash -euo pipefail ${script} < keys >/dev/null 2>&1 &
+  pid=$!
+  exec 3>keys            # open the writer side so the prompt starts reading
+  sleep 1
+  kill -INT "$pid"
+  sleep 1
+  printf 'Name\npw\npw\n' >&3
+  exec 3>&-
+  wait "$pid"
+  ${expect "chpasswd [deck:pw]"}
+
+  echo "== Ctrl+D (end of input) re-asks, then gives up visibly without a marker"
+  rm -f "$CALLS" marker name
+  result=$(printf 'Name\n' | FIRSTBOOT_USER=deck FIRSTBOOT_MARKER=$PWD/marker FIRSTBOOT_NAME_FILE=$PWD/name \
+    bash -euo pipefail ${script} 2>&1) && { echo "should have given up"; exit 1; }
+  grep -q "giving up" <<<"$result" || { echo "no 'giving up' message"; echo "$result"; exit 1; }
+  test ! -e marker || { echo "marker written without a password"; exit 1; }
+
   touch $out
 ''

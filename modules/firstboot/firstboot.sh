@@ -5,6 +5,28 @@ marker=${FIRSTBOOT_MARKER:-/var/lib/survival-kit/firstboot-done}
 # NixOS rewrites /etc/passwd at every boot; the module re-applies this file
 namefile=${FIRSTBOOT_NAME_FILE:-/var/lib/survival-kit/display-name}
 
+# Ctrl+C / Ctrl+\ / Ctrl+Z must not abort the setup half-way
+trap '' INT QUIT TSTP
+
+# ask [read options…] — read one answer into $REPLY, exactly as typed (read
+# without a variable name never trims spaces). Ctrl+D (end of input) counts as an
+# empty answer; three in a row → give up for now: no marker, so the prompt comes
+# back at the next start.
+eofs=0
+ask() {
+  if read -r "$@"; then
+    eofs=0
+    return 0
+  fi
+  REPLY=""
+  echo
+  eofs=$((eofs + 1))
+  if ((eofs >= 3)); then
+    echo "No input — giving up for now; you'll be asked again at the next start." >&2
+    exit 1
+  fi
+}
+
 printf '\033c' # clear the console
 cat <<'EOF'
 
@@ -14,7 +36,8 @@ cat <<'EOF'
 EOF
 
 while true; do
-  read -rp "Your name (shown on the desktop): " name
+  ask -p "Your name (shown on the desktop): "
+  name=$REPLY
   # printable only (arrow keys/tab insert control characters on the console);
   # ':' and ',' would split the /etc/passwd name field
   [[ $name =~ ^[[:print:]]+$ && $name != *[:,]* ]] && break
@@ -22,10 +45,11 @@ while true; do
 done
 
 while true; do
-  # IFS= keeps leading/trailing spaces — the password is exactly what was typed
-  IFS= read -rsp "Choose a password (for sudo and the text console): " pass1
+  ask -s -p "Choose a password (for sudo and the text console): "
+  pass1=$REPLY
   echo
-  IFS= read -rsp "Repeat the password: " pass2
+  ask -s -p "Repeat the password: "
+  pass2=$REPLY
   echo
   [[ -n $pass1 && $pass1 == "$pass2" ]] && break
   echo "Empty or not matching — try again."
@@ -34,7 +58,7 @@ done
 # The password matters most: set it (and the marker) first, so a problem with
 # the name can never leave the account without a password.
 printf '%s:%s\n' "$FIRSTBOOT_USER" "$pass1" | chpasswd
-unset pass1 pass2
+unset pass1 pass2 REPLY
 mkdir -p "$(dirname "$marker")"
 touch "$marker"
 

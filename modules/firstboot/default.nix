@@ -72,6 +72,8 @@ in
         "systemd-vconsole-setup.service"
       ];
       unitConfig.ConditionPathExists = "!${marker}";
+      # never (re)start on `nixos-rebuild switch`: it would grab tty1 on a running desktop
+      restartIfChanged = false;
       serviceConfig = {
         Type = "oneshot";
         ExecStart = lib.getExe prompt;

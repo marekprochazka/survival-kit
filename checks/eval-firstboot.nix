@@ -30,4 +30,7 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   cfg.system.activationScripts ? survival-kit-display-name
 ) "the display name must be re-applied after NixOS rewrites /etc/passwd";
+assert lib.assertMsg (
+  !svc.restartIfChanged
+) "a rebuild must never (re)start the prompt on a running desktop";
 pkgs.runCommand "eval-firstboot" { } "touch $out"
