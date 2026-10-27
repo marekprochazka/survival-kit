@@ -22,6 +22,14 @@ def fixture_bytes(**kw):
         return pmtiles_fixture.write(Path(d) / "m.pmtiles", **kw).read_bytes()
 
 
+class Sizes(unittest.TestCase):
+    def test_size_mb_below_a_gb(self):
+        self.assertEqual(server._size(15_051_084), "15 MB")
+        self.assertEqual(server._size(127_212_288), "127 MB")  # was "0.1 GB"
+        self.assertEqual(server._size(999_000_000), "999 MB")
+        self.assertEqual(server._size(2_019_000_000), "2.0 GB")
+
+
 class Api(unittest.TestCase):
     models_enabled = True
     maps_enabled = True

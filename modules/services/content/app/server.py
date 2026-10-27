@@ -50,7 +50,7 @@ class Config:
 
 
 def _size(n):
-    return f"{n / 1000**3:.1f} GB" if n >= 10**8 else f"{n / 1000**2:.0f} MB"
+    return f"{n / 1000**3:.1f} GB" if n >= 10**9 else f"{n / 1000**2:.0f} MB"
 
 
 def render(template, s):

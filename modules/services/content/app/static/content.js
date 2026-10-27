@@ -42,19 +42,25 @@ async function importOne(kind, file, model) {
   bar.max = file.size;
   line.appendChild(bar);
   q.delete("size");
-  const result = await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", "/api/upload?" + q);
-    xhr.upload.onprogress = (e) => { bar.value = e.loaded; };
-    xhr.upload.onload = () => { line.firstChild.textContent = `${file.name}: adding…`; };
-    xhr.onload = () => {
-      let body = {};
-      try { body = JSON.parse(xhr.responseText); } catch (_) { /* keep empty */ }
-      xhr.status === 200 ? resolve(body) : reject(new Error(body.error || xhr.statusText));
-    };
-    xhr.onerror = () => reject(new Error("the connection was lost; nothing was imported"));
-    xhr.send(file);
-  });
+  let result;
+  try {
+    result = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", "/api/upload?" + q);
+      xhr.upload.onprogress = (e) => { bar.value = e.loaded; };
+      xhr.upload.onload = () => { line.firstChild.textContent = `${file.name}: adding…`; };
+      xhr.onload = () => {
+        let body = {};
+        try { body = JSON.parse(xhr.responseText); } catch (_) { /* keep empty */ }
+        xhr.status === 200 ? resolve(body) : reject(new Error(body.error || xhr.statusText));
+      };
+      xhr.onerror = () => reject(new Error("the connection was lost; nothing was imported"));
+      xhr.send(file);
+    });
+  } catch (e) {
+    line.remove(); // the "uploading/adding…" line and its bar; the caller shows the error
+    throw e;
+  }
   bar.remove();
   line.textContent = `${file.name}: ${result.result} as "${title(result.name)}"`;
   if (result.note) say(`${file.name}: note — ${result.note}`);
