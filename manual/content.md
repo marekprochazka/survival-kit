@@ -1,14 +1,16 @@
 # Content
 
-The **Content** tile (<https://content.deck>) brings new wiki books and AI models onto the
-box from a USB stick or a disc, shows how much disk space is used, and removes things you
-no longer need.
+The **Content** tile (<https://content.deck>) brings new wiki books, maps and AI models onto
+the box from a USB stick or a disc, shows how much disk space is used, and removes things
+you no longer need.
 
 ## Importing
 
 1. Plug in the stick (or insert the disc) and open **Content**.
 2. Under *Wiki books*, choose **Import wiki files** (or **a folder** to take every `.zim` in
-   it); under *AI models*, choose **Import a model** (a `.gguf` file).
+   it); under *Maps*, choose **Import map files** (`.pmtiles` — see
+   [Getting more maps](maps.html#getting-more-maps)); under *AI models*, choose
+   **Import a model** (a `.gguf` file).
 3. In the file dialog, click your stick or disc in the side panel — that opens it — and
    pick the files.
 4. Each file shows a progress bar, then a result. Models also ask for a name first
@@ -25,13 +27,18 @@ book needs room for the new one too.
 
 **Books that came with the box** (shown in grey) can be replaced the same way: importing a
 newer Arch Wiki replaces the built-in one, after you confirm. Delete the import and the
-built-in one is back. The box's own manuals can't be replaced.
+built-in one is back. The box's own manuals can't be replaced. **Maps** work the same way:
+a map named like a built-in one (`czechia.pmtiles`) replaces it until you delete the import.
+
+**Maps are checked** before they are added: the file must be a PMTiles *vector* map made
+for Protomaps version 4 (what this box draws). Picture (raster) maps, other versions and
+files cut off while copying are refused with the reason.
 
 ## Deleting and disk space
 
-Each imported book and model has a **Delete** button (it asks first). Books that came with
-the box can't be deleted. The line at the top shows free space and what the wiki and the AI
-models take.
+Each imported book, map and model has a **Delete** button (it asks first). Books and maps
+that came with the box can't be deleted. The line at the top shows free space and what the
+wiki, the maps and the AI models take.
 
 On boxes installed as **lite**, there is no AI models section.
 

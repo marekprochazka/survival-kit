@@ -11,7 +11,7 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 | Layer | Checks | Speed | Runs |
 |---|---|---|---|
 | Static | `lint` (nixfmt, statix, deadnix) | seconds | pre-commit hook, CI, locally |
-| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles, content, chat) + `firstboot-script` + `tls-script` + `content-unit` + `lookup-unit` + `chat-unit` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
+| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles, content, chat, maps) + `firstboot-script` + `tls-script` + `content-unit` + `lookup-unit` + `chat-unit` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
 | VM | `boot`, `services`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
 | Closure | `lite-closure` (no Ollama anywhere in a lite system) | minutes (builds lite) | locally |
 | Install | installing from the ISO | long | by hand (QEMU / VirtualBox, offline) |
@@ -30,7 +30,12 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
   SIGINT and end-of-input) and stand-ins
   for `usermod`/`chpasswd`.
 - `content-unit` runs the content manager's Python tests (`unittest`, stdlib) — names,
-  space, uploads, the HTTP API on a real local server — with stand-ins for Kiwix/Ollama.
+  space, uploads, the map-file check, the HTTP API on a real local server — with stand-ins
+  for Kiwix/Ollama.
+- **Maps** in the `services` VM test use tiny stand-in map files
+  (`survivalKit.services.maps.builtins`, made by `pmtiles_fixture.py`), so tests never need
+  the real built-in maps (see [Maps](maps.html)). The map page itself (browser JavaScript)
+  has no unit tests — it is checked by hand.
 - `lookup-unit` / `chat-unit`: the wiki lookup (fixtures = real Kiwix output) and the chat
   (storage, queue, pipeline, events on a real local server) with stand-ins. The `services` VM
   test runs both against the real Kiwix with **`checks/fake-ollama.py`** in place of a model.

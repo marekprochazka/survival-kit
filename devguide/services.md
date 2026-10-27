@@ -7,20 +7,26 @@ registry, `modules/services/web.nix` generates everything else, so nothing can d
 
 | Generated | From |
 |---|---|
-| nginx vhost `https://<subdomain>.<domain>` → `http://127.0.0.1:<port>` (http → 301, WebSockets passed through) | each entry |
+| nginx vhost `https://<subdomain>.<domain>` → `http://127.0.0.1:<port>` (http → 301, WebSockets passed through), or the files in `root` | each entry |
 | `/etc/hosts`: `127.0.0.1 deck <subdomain>.deck …` | each entry |
 | `https://deck/health/<name>` → the service's `healthPath` | each entry |
 | the name `<subdomain>.deck` in the site certificate (see [HTTPS](tls.html)) | each entry |
 | a dashboard tile | each entry (see [Dashboard](dashboard.html)) |
 
-Registry entry fields: `subdomain` (default: the name), `port` (required), `title`,
-`description`, `order` (dashboard position, default 100), `healthPath` (default `/`).
+Registry entry fields: `subdomain` (default: the name), `port` *or* `root` (exactly one),
+`title`, `description`, `order` (dashboard position, default 100), `healthPath` (default `/`).
 The domain is `survivalKit.web.domain` (default `deck`).
+
+**Static sites.** An entry with `root` (a directory, usually a store path) instead of `port`
+has no backend: nginx serves the files itself, and the health endpoint answers 200 when the
+file `root + healthPath` exists (so give a file, e.g. `/index.html`). Extra locations can be
+added to its vhost as usual (`services.nginx.virtualHosts."<sub>.deck".locations`). Used by
+[Maps](maps.html).
 
 **Build-time checks** (NixOS `assertions` in `web.nix`): the build fails, naming the
 entries involved, if two entries share a subdomain (case-insensitive) or a port, an entry
-uses port 80/443 (nginx's own), a name or subdomain uses anything but `a-z`, `0-9` and
-`-`, or a subdomain equals the bare domain.
+uses port 80/443 (nginx's own), an entry sets both or neither of `port` and `root`, a name
+or subdomain uses anything but `a-z`, `0-9` and `-`, or a subdomain equals the bare domain.
 
 nginx itself always runs (the dashboard is always there). The `deck` vhost is the
 **default** one, so opening the box by IP or `<hostname>.local` shows the dashboard. Ports 80

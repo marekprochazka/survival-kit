@@ -4,9 +4,10 @@
 |---|---|
 | <https://deck> | Dashboard — every service, with a live status dot |
 | <https://wiki.deck> | Wiki — offline encyclopedias and documentation (Kiwix) |
+| <https://maps.deck> | Maps — offline maps of the world, Central Europe and Czechia, with a ruler (see [Maps](maps.html)) |
 | <https://vault.deck> | Passwords — offline password manager (see [Passwords](passwords.html)) |
 | <https://chat.deck> | Chat — ask the local AI, answers from the wiki with sources (full only; see [Chat](chat.html)) |
-| <https://content.deck> | Content — import wiki books and AI models, see disk use (see [Content](content.html)) |
+| <https://content.deck> | Content — import wiki books, maps and AI models, see disk use (see [Content](content.html)) |
 
 **lite or full.** The box was installed as one of two *profiles*: **lite** (the above —
 for machines with little memory or a slow processor) or **full** (adds local
@@ -25,3 +26,5 @@ address — e.g. **`anna@vault.deck`** for Passwords. It only has to *look* like
 
 The wiki ships with: the **Arch Wiki** (general Linux help), **man pages**,
 **Nix**, **bash** and **git** references, and this manual.
+
+The maps were cut from OpenStreetMap data of **2026-10-27** (© OpenStreetMap contributors).

@@ -13,3 +13,6 @@ By hand, in a terminal:
 2. Refresh the catalog: `sudo systemctl restart kiwix-library` (or reboot).
 
 To remove one, delete the file and refresh the same way.
+
+**Maps** (`.pmtiles`) come in through the Content tile too; how to make one for any area
+is in [Maps](maps.html#getting-more-maps).

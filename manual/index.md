@@ -8,7 +8,8 @@ password is what `sudo` and the text console (Ctrl+Alt+F2) ask for — the
 desktop itself logs in automatically.
 
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
-- [Content](content.html) — bring in wiki books and AI models from a stick
+- [Maps](maps.html) — offline maps, measuring distances, getting more maps
+- [Content](content.html) — bring in wiki books, maps and AI models from a stick
 - [Passwords](passwords.html) — the offline password manager
 - [Chat](chat.html) — ask the local AI; it looks in the wiki first (full profile)
 - [AI models](ai-models.html) — the models behind the chat (full profile)
