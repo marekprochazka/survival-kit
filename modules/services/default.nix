@@ -9,5 +9,6 @@
     ./content
     ./lookup
     ./chat
+    ./maps
   ];
 }

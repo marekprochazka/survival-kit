@@ -28,6 +28,7 @@ let
     lookup-unit = import ./lookup-unit.nix args;
     chat-unit = import ./chat-unit.nix args;
     eval-chat = import ./eval-chat.nix args;
+    eval-maps = import ./eval-maps.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in

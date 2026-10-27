@@ -23,6 +23,7 @@ in
     kiwix.enable = lib.mkDefault true;
     vaultwarden.enable = lib.mkDefault true;
     content.enable = lib.mkDefault true; # the content manager (both profiles)
+    maps.enable = lib.mkDefault true; # offline maps (both profiles)
     ollama.enable = lib.mkDefault (profile == "full");
     lookup.enable = lib.mkDefault true; # the wiki lookup + MCP (no model needed)
     chat.enable = lib.mkDefault (profile == "full"); # needs a model
