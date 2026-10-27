@@ -1,4 +1,4 @@
-"""Unit tests for content.py — names, space, uploads, wiki and models (no HTTP, no VM)."""
+"""Unit tests for content.py — names, space, uploads, wiki, maps and models (no HTTP, no VM)."""
 
 import io
 import os
@@ -111,12 +111,18 @@ class WikiTest(unittest.TestCase):
         def refresh():
             self.refreshed += 1
 
-        self.wiki = content.Wiki(
+        def validate(path):
+            if not self.readable:
+                raise Refused("not a readable wiki book")
+
+        self.wiki = content.Shelf(
             self.zims,
+            ".zim",
             builtins={"devdocs_en_git.zim": 100, "survival-kit.zim": 50},
             protected=PROTECTED,
-            validate=lambda p: self.readable,
+            validate=validate,
             refresh=refresh,
+            noun="book",
         )
 
     def upload(self, data=b"zim"):
@@ -175,6 +181,78 @@ class WikiTest(unittest.TestCase):
         (self.zims / "notes.txt").write_text("x")
         self.wiki.install(self.upload(), "a.zim")
         self.assertEqual([i["name"] for i in self.wiki.items()], ["a.zim"])
+
+
+class MapNames(unittest.TestCase):
+    def test_map_name(self):
+        self.assertEqual(content.map_name("Austria Z12.PMTiles"), "austria-z12.pmtiles")
+        self.assertEqual(content.map_name("../x.pmtiles"), "x.pmtiles")
+        self.assertEqual(content.map_name("..hidden.pmtiles"), "hidden.pmtiles")
+        for bad in ["x.mbtiles", ".pmtiles", "!!!.pmtiles"]:
+            with self.subTest(bad=bad), self.assertRaises(Refused):
+                content.map_name(bad)
+        with self.assertRaises(Refused):
+            content.map_name("a" * 300 + ".pmtiles")
+
+
+class MapsTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.incoming = self.dir / ".incoming"
+        self.incoming.mkdir()
+        self.note = None
+        self.usable = True
+
+        def validate(path):
+            if not self.usable:
+                raise Refused("not a PMTiles map")
+            return self.note
+
+        self.maps = content.Shelf(
+            self.dir,
+            ".pmtiles",
+            builtins={"czechia.pmtiles": 100, "world.pmtiles": 10},
+            protected=set(),
+            validate=validate,
+            refresh=lambda: None,
+            noun="map",
+        )
+
+    def upload(self, data=b"map"):
+        return content.receive(io.BytesIO(data), len(data), self.incoming)
+
+    def test_maps_shelf_replace_builtin_and_restore(self):
+        self.assertEqual(self.maps.exists("czechia.pmtiles"), "builtin")
+        self.maps.install(self.upload(), "czechia.pmtiles")
+        flags = {b["name"]: b for b in self.maps.builtin_items()}
+        self.assertTrue(flags["czechia.pmtiles"]["replaced"])
+        self.assertFalse(flags["world.pmtiles"]["protected"])
+        self.maps.delete("czechia.pmtiles")
+        self.assertEqual(self.maps.exists("czechia.pmtiles"), "builtin")
+        with self.assertRaises(Refused) as cm:
+            self.maps.delete("world.pmtiles")
+        self.assertEqual(cm.exception.status, 403)
+        self.assertIn("built-in maps", str(cm.exception))
+
+    def test_maps_refused_file_removed(self):
+        self.usable = False
+        with self.assertRaises(Refused):
+            self.maps.install(self.upload(), "bad.pmtiles")
+        self.assertEqual(list(self.incoming.iterdir()), [])
+        self.assertFalse((self.dir / "bad.pmtiles").exists())
+
+    def test_maps_install_returns_note(self):
+        self.note = "doubtful"
+        self.assertEqual(self.maps.install(self.upload(), "a.pmtiles"), "doubtful")
+        self.assertEqual([i["name"] for i in self.maps.items()], ["a.pmtiles"])
+
+    def test_maps_names_checked(self):
+        for bad in ["../x.pmtiles", "x.zim", ".incoming"]:
+            with self.subTest(bad=bad), self.assertRaises(Refused):
+                self.maps.delete(bad)
+        with self.assertRaises(Refused) as cm:
+            self.maps.delete("nope.pmtiles")
+        self.assertIn("no such map", str(cm.exception))
 
 
 class FakeOllama:

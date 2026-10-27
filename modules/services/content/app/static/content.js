@@ -20,17 +20,20 @@ async function api(method, url) {
   return body;
 }
 
+// "book.zim" → "book", "czechia.pmtiles" → "czechia"
+const title = (name) => name.replace(/\.(zim|pmtiles)$/, "");
+
 // one file: ask the box first (name, clash, space), confirm a replacement, then upload
 async function importOne(kind, file, model) {
   const q = new URLSearchParams({ kind, file: file.name, size: file.size });
   if (model) q.set("model", model);
   const check = await api("GET", "/api/check?" + q);
-  const title = check.name.replace(/\.zim$/, "");
-  if (check.exists === "import" && !confirm(`"${title}" is already on this box. Replace it?`)) {
+  const noun = kind === "map" ? "map" : "book";
+  if (check.exists === "import" && !confirm(`"${title(check.name)}" is already on this box. Replace it?`)) {
     return say(`${file.name}: skipped`);
   }
   if (check.exists === "builtin" && !confirm(
-    `"${title}" came with the box. Replace the built-in book with this file?\n` +
+    `"${title(check.name)}" came with the box. Replace the built-in ${noun} with this file?\n` +
     "Deleting the import later brings the built-in back.")) {
     return say(`${file.name}: skipped`);
   }
@@ -53,7 +56,8 @@ async function importOne(kind, file, model) {
     xhr.send(file);
   });
   bar.remove();
-  line.textContent = `${file.name}: ${result.result} as "${result.name.replace(/\.zim$/, "")}"`;
+  line.textContent = `${file.name}: ${result.result} as "${title(result.name)}"`;
+  if (result.note) say(`${file.name}: note — ${result.note}`);
 }
 
 async function importFiles(input) {
@@ -88,13 +92,12 @@ document.querySelectorAll("input[data-import]").forEach((input) => {
 document.querySelectorAll("button[data-delete]").forEach((button) => {
   button.addEventListener("click", async () => {
     const { delete: kind, name } = button.dataset;
-    const title = name.replace(/\.zim$/, "");
-    if (!confirm(`Delete "${title}" from this box?`)) return;
+    if (!confirm(`Delete "${title(name)}" from this box?`)) return;
     try {
       await api("DELETE", `/api/${kind}/${encodeURIComponent(name)}`);
       location.reload();
     } catch (e) {
-      say(`${title}: ${e.message}`, true);
+      say(`${title(name)}: ${e.message}`, true);
     }
   });
 });

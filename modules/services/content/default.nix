@@ -1,5 +1,5 @@
-# Content manager (ADR-0004) at https://content.<domain>: import wiki books and AI models
-# through the browser's file dialog, see disk use, delete. A small Python program (stdlib
+# Content manager (ADR-0004) at https://content.<domain>: import wiki books, maps and AI
+# models through the browser's file dialog, see disk use, delete. A small Python program (stdlib
 # only, ./app) behind nginx; file-based with system rights — it never logs into a service.
 {
   config,
@@ -14,6 +14,8 @@ let
   zims = "/var/lib/survival-kit/kiwix/zims";
   stateDir = "/var/lib/survival-kit/content";
   ollama = config.services.ollama.enable;
+  maps = config.survivalKit.services.maps;
+  mapsDir = "/var/lib/survival-kit/maps"; # created by the maps module, served by nginx
   # the page + the dashboard's look
   static = pkgs.runCommand "content-static" { } ''
     mkdir $out
@@ -23,7 +25,7 @@ let
 in
 {
   options.survivalKit.services.content.enable =
-    lib.mkEnableOption "the content manager (import and manage wiki books and AI models)";
+    lib.mkEnableOption "the content manager (import and manage wiki books, maps and AI models)";
 
   config = lib.mkIf cfg.enable {
     systemd.services.survival-kit-content = {
@@ -47,6 +49,10 @@ in
         OLLAMA = if ollama then "1" else "0";
         MODELS_DIR = config.services.ollama.models;
         LOOKUP_URL = lib.optionalString config.survivalKit.services.lookup.enable "http://127.0.0.1:8310";
+        # maps: imports land where nginx serves them; the map page reads both folders
+        MAPS_DIR = lib.optionalString maps.enable mapsDir;
+        MAP_BUILTINS_DIR = lib.optionalString maps.enable "${maps.builtinDir}";
+        MAP_SCHEME = "4"; # Protomaps basemap version the bundled map style draws
         PYTHONUNBUFFERED = "1";
         # the ollama CLI panics without a $HOME (it derives ~/.ollama even as a client)
         HOME = stateDir;
@@ -60,7 +66,8 @@ in
         ReadWritePaths = [
           zims
           stateDir
-        ];
+        ]
+        ++ lib.optional maps.enable mapsDir;
         ProtectHome = true;
         PrivateTmp = true;
         NoNewPrivileges = true;
@@ -71,7 +78,7 @@ in
       subdomain = "content";
       inherit port;
       title = "Content";
-      description = "Import and manage wiki books and AI models";
+      description = "Import and manage wiki books, maps and AI models";
       order = 40;
       healthPath = "/health";
     };

@@ -6,10 +6,12 @@ module, and this streams straight to disk). Standard library only.
 
 API
   GET    /health                               "ok"
-  GET    /api/status                           disk, wiki, builtins, models (null on lite), locations
+  GET    /api/status                           disk, wiki, builtins, maps, map_builtins,
+                                               models (null on lite), locations
   GET    /api/check?kind=&file=&size=[&model=] stored name + whether it exists; space check
-  PUT    /api/upload?kind=&file=[&model=]      body = the file (Content-Length required)
-  DELETE /api/wiki/<name>, /api/models/<name>
+  PUT    /api/upload?kind=&file=[&model=]      body = the file (Content-Length required);
+                                               kind = wiki | map | model
+  DELETE /api/wiki/<name>, /api/maps/<name>, /api/models/<name>
   GET    /, /content.js, /style.css            the page
 """
 
@@ -27,11 +29,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import content
+import pmtiles
 from content import Refused
 
 STATIC = {"/": "index.html", "/content.js": "content.js", "/style.css": "style.css"}
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css"}
 NO_MODELS = "no AI models on this box (lite profile)"
+NO_MAPS = "no maps on this box"
 MODELS_DOWN = "not available right now"
 
 
@@ -41,6 +45,7 @@ class Config:
     static_dir: Path
     wiki_incoming: Path
     model_incoming: Path
+    map_incoming: Path
     locations: dict
 
 
@@ -52,11 +57,12 @@ def render(template, s):
     """The page's lists as HTML, so viewing works without JavaScript."""
     e = html.escape
     d = s["disk"]
-    rest = d["total"] - d["free"] - d["wiki"] - d["models"]
+    rest = d["total"] - d["free"] - d["wiki"] - d["maps"] - d["models"]
     out = [
         '<section id="disk"><h2>Disk</h2>',
         f'<p>{_size(d["free"])} free of {_size(d["total"])}. '
-        f'Wiki {_size(d["wiki"])}, AI models {_size(d["models"])}, system and other {_size(max(rest, 0))}.</p>',
+        f'Wiki {_size(d["wiki"])}, maps {_size(d["maps"])}, AI models {_size(d["models"])}, '
+        f"system and other {_size(max(rest, 0))}.</p>",
         "</section>",
         f'<section id="wiki"><h2>Wiki books</h2><p class="where">{e(s["locations"]["wiki"])}</p>',
         "<table><tr><th>Book</th><th>Size</th><th>Imported</th><th></th></tr>",
@@ -75,6 +81,22 @@ def render(template, s):
         '<p><label>Import wiki files <input type="file" data-import="wiki" accept=".zim" multiple></label> '
         '<label>or a folder <input type="file" data-import="wiki" webkitdirectory></label></p></section>'
     )
+    if s["maps"] is not None:
+        out.append(f'<section id="maps"><h2>Maps</h2><p class="where">{e(s["locations"]["maps"])}</p>')
+        out.append("<table><tr><th>Map</th><th>Size</th><th>Imported</th><th></th></tr>")
+        for m in s["maps"]:
+            day = time.strftime("%Y-%m-%d", time.localtime(m["mtime"]))
+            out.append(
+                f'<tr><td>{e(m["name"][:-8])}</td><td>{_size(m["size"])}</td><td>{day}</td>'
+                f'<td><button data-delete="maps" data-name="{e(m["name"])}">Delete</button></td></tr>'
+            )
+        for m in s["map_builtins"]:
+            note = "replaced by import" if m["replaced"] else "built in"
+            out.append(f'<tr class="builtin"><td>{e(m["name"][:-8])}</td><td>{_size(m["size"])}</td><td>{note}</td><td></td></tr>')
+        out.append("</table>")
+        out.append(
+            '<p><label>Import map files <input type="file" data-import="map" accept=".pmtiles" multiple></label></p></section>'
+        )
     if s["models"] is not None:
         out.append(f'<section id="models"><h2>AI models</h2><p class="where">{e(s["locations"]["models"])}</p>')
         if s["models_error"]:
@@ -91,8 +113,11 @@ def render(template, s):
     return template.replace("<!--CONTENT-->", "\n".join(out))
 
 
-def make_server(config, wiki, models, disk):
-    """disk() → (total, free) bytes of the filesystem holding the content."""
+def make_server(config, wiki, models, disk, maps=None):
+    """disk() → (total, free) bytes of the filesystem holding the content.
+
+    models / maps: None when the box has no AI models (lite) / no maps service.
+    """
 
     def status():
         total, free = disk()
@@ -108,10 +133,13 @@ def make_server(config, wiki, models, disk):
                 "total": total,
                 "free": free,
                 "wiki": wiki.used(),
+                "maps": maps.used() if maps else 0,
                 "models": sum(m["size"] for m in model_items or []),
             },
             "wiki": wiki.items(),
             "builtins": wiki.builtin_items(),
+            "maps": maps.items() if maps else None,
+            "map_builtins": maps.builtin_items() if maps else [],
             "models": model_items,
             "models_error": models_error,
             "locations": config.locations,
@@ -122,6 +150,10 @@ def make_server(config, wiki, models, disk):
         kind, file = q.get("kind", ""), q.get("file", "")
         if kind == "wiki":
             return wiki, content.wiki_name(file, wiki.protected), 1, config.wiki_incoming
+        if kind == "map":
+            if maps is None:
+                raise Refused(NO_MAPS)
+            return maps, content.map_name(file), 1, config.map_incoming
         if kind == "model":
             if models is None:
                 raise Refused(NO_MODELS)
@@ -201,8 +233,8 @@ def make_server(config, wiki, models, disk):
                 content.check_space(factor * int(length), free, total)
                 existed = store.exists(name)
                 tmp = content.receive(self.rfile, int(length), incoming)
-                store.install(tmp, name)
-                self.send(200, {"name": name, "result": "replaced" if existed else "added"})
+                note = store.install(tmp, name)
+                self.send(200, {"name": name, "result": "replaced" if existed else "added", "note": note})
 
             self.route(upload)
 
@@ -214,6 +246,10 @@ def make_server(config, wiki, models, disk):
                 name = urllib.parse.unquote(name)
                 if kind == "wiki":
                     wiki.delete(name)
+                elif kind == "maps":
+                    if maps is None:
+                        raise Refused(NO_MAPS)
+                    maps.delete(name)
                 elif kind == "models":
                     if models is None:
                         raise Refused(NO_MODELS)
@@ -237,6 +273,12 @@ def kiwix_validate(path):
     with tempfile.TemporaryDirectory() as d:
         r = subprocess.run(["kiwix-manage", f"{d}/library.xml", "add", str(path)], capture_output=True)
         return r.returncode == 0
+
+
+def wiki_check(path):
+    """The wiki shelf's validate: Refused unless Kiwix can read the book."""
+    if not kiwix_validate(path):
+        raise Refused("not a readable wiki book")
 
 
 def kiwix_refresh():
@@ -294,31 +336,52 @@ def main():
     env = os.environ
     zims = Path(env["ZIMS_DIR"])
     state = Path(env["STATE_DIR"])
+    maps_dir = Path(env["MAPS_DIR"]) if env.get("MAPS_DIR") else None
     config = Config(
         port=int(env["CONTENT_PORT"]),
         static_dir=Path(env["STATIC_DIR"]),
         wiki_incoming=zims / ".incoming",
         model_incoming=state / "incoming",
-        locations={"wiki": str(zims), "models": env.get("MODELS_DIR", "")},
+        map_incoming=maps_dir / ".incoming" if maps_dir else state / "map-incoming",
+        locations={"wiki": str(zims), "models": env.get("MODELS_DIR", ""), "maps": str(maps_dir or "")},
     )
     _clear(config.wiki_incoming)
     _clear(config.model_incoming)
-    builtins_dir = Path(env["BUILTINS_DIR"]) if env.get("BUILTINS_DIR") else None
-    builtins = {p.name: p.stat().st_size for p in builtins_dir.glob("*.zim")} if builtins_dir else {}
-    wiki = content.Wiki(
+
+    def sizes(var, ext):
+        """name → size of the built-in files in the directory env[var] names (if any)."""
+        d = Path(env[var]) if env.get(var) else None
+        return {p.name: p.stat().st_size for p in d.glob("*" + ext)} if d else {}
+
+    wiki = content.Shelf(
         zims,
-        builtins=builtins,
+        ".zim",
+        builtins=sizes("BUILTINS_DIR", ".zim"),
         protected=set(env.get("PROTECTED", "").split()),
-        validate=kiwix_validate,
+        validate=wiki_check,
         refresh=kiwix_refresh,
+        noun="book",
     )
+    maps = None
+    if maps_dir:
+        _clear(config.map_incoming)
+        scheme = int(env.get("MAP_SCHEME", "4"))
+        maps = content.Shelf(
+            maps_dir,
+            ".pmtiles",
+            builtins=sizes("MAP_BUILTINS_DIR", ".pmtiles"),
+            protected=set(),
+            validate=lambda path: pmtiles.check(path, scheme),
+            refresh=lambda: None,  # nginx serves the folder as it is; the page reloads it
+            noun="map",
+        )
     models = content.Models(Ollama(config.model_incoming)) if env.get("OLLAMA") == "1" else None
 
     def disk():
         u = shutil.disk_usage(zims)
         return u.total, u.free
 
-    httpd = make_server(config, wiki, models, disk)
+    httpd = make_server(config, wiki, models, disk, maps)
     print(f"content manager on 127.0.0.1:{config.port}", flush=True)
     httpd.serve_forever()
 

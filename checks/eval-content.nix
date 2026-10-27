@@ -21,8 +21,17 @@ assert lib.assertMsg (
   lib.sort lib.lessThan svc.serviceConfig.ReadWritePaths == [
     "/var/lib/survival-kit/content"
     "/var/lib/survival-kit/kiwix/zims"
+    "/var/lib/survival-kit/maps"
   ]
-) "the service may write only to its own dir and the wiki's drop-in dir";
+) "the service may write only to its own dir, the wiki's drop-in dir and the maps dir";
+assert lib.assertMsg (
+  svc.environment.MAPS_DIR == "/var/lib/survival-kit/maps"
+  && svc.environment.MAP_SCHEME == "4"
+  && svc.environment.MAP_BUILTINS_DIR == "${cfg.survivalKit.services.maps.builtinDir}"
+) "maps section: imports dir, built-in maps, Protomaps scheme 4";
+assert lib.assertMsg (
+  reg.description == "Import and manage wiki books, maps and AI models"
+) "the tile names all three kinds";
 assert lib.assertMsg (svc.environment.OLLAMA == "1") "full: the models section is on";
 assert lib.assertMsg (
   svc.environment.HOME == "/var/lib/survival-kit/content"

@@ -9,14 +9,22 @@ import urllib.request
 from pathlib import Path
 
 import content
+import pmtiles
+import pmtiles_fixture
 import server
 from test_content import PROTECTED, FakeOllama
 
 GB = 1000**3
 
 
+def fixture_bytes(**kw):
+    with tempfile.TemporaryDirectory() as d:
+        return pmtiles_fixture.write(Path(d) / "m.pmtiles", **kw).read_bytes()
+
+
 class Api(unittest.TestCase):
     models_enabled = True
+    maps_enabled = True
 
     def setUp(self):
         root = Path(tempfile.mkdtemp())
@@ -28,12 +36,29 @@ class Api(unittest.TestCase):
         (static / "index.html").write_text("<html><!--CONTENT--></html>")
         (static / "content.js").write_text("// js")
         (static / "style.css").write_text("/* css */")
-        self.wiki = content.Wiki(
+        self.wiki = content.Shelf(
             self.zims,
+            ".zim",
             builtins={"devdocs_en_git.zim": 100, "survival-kit.zim": 50},
             protected=PROTECTED,
-            validate=lambda p: True,
+            validate=lambda p: None,
             refresh=lambda: None,
+            noun="book",
+        )
+        self.maps_dir = root / "maps"
+        (self.maps_dir / ".incoming").mkdir(parents=True)
+        maps = (
+            content.Shelf(
+                self.maps_dir,
+                ".pmtiles",
+                builtins={"czechia.pmtiles": 100, "world.pmtiles": 10},
+                protected=set(),
+                validate=lambda p: pmtiles.check(p, 4),
+                refresh=lambda: None,
+                noun="map",
+            )
+            if self.maps_enabled
+            else None
         )
         self.ollama = FakeOllama()
         models = content.Models(self.ollama) if self.models_enabled else None
@@ -42,9 +67,14 @@ class Api(unittest.TestCase):
             static_dir=static,
             wiki_incoming=self.zims / ".incoming",
             model_incoming=root / "state" / "incoming",
-            locations={"wiki": str(self.zims), "models": "/var/lib/ollama/models"},
+            map_incoming=self.maps_dir / ".incoming",
+            locations={
+                "wiki": str(self.zims),
+                "models": "/var/lib/ollama/models",
+                "maps": str(self.maps_dir),
+            },
         )
-        self.httpd = server.make_server(config, self.wiki, models, lambda: (100 * GB, 50 * GB))
+        self.httpd = server.make_server(config, self.wiki, models, lambda: (100 * GB, 50 * GB), maps)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
 
@@ -79,9 +109,50 @@ class Api(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(s["disk"]["total"], 100 * GB)
         self.assertEqual(s["disk"]["free"], 50 * GB)
-        self.assertEqual(set(s), {"disk", "wiki", "builtins", "models", "models_error", "locations"})
+        self.assertEqual(
+            set(s),
+            {"disk", "wiki", "builtins", "maps", "map_builtins", "models", "models_error", "locations"},
+        )
         self.assertIsNone(s["models_error"])
         self.assertEqual(s["models"], [])
+        self.assertEqual(s["maps"], [])
+        self.assertEqual([b["name"] for b in s["map_builtins"]], ["czechia.pmtiles", "world.pmtiles"])
+        self.assertEqual(s["disk"]["maps"], 0)
+
+    def test_page_has_maps_section(self):
+        page = self.call("GET", "/")[1]
+        self.assertIn(b'id="maps"', page)
+        self.assertIn(b'data-import="map"', page)
+
+    def test_upload_map_roundtrip(self):
+        data = fixture_bytes()
+        status, r = self.json("PUT", "/api/upload?kind=map&file=Austria.PMTiles", data)
+        self.assertEqual((status, r["name"], r["result"], r["note"]), (200, "austria.pmtiles", "added", None))
+        s = self.json("GET", "/api/status")[1]
+        self.assertEqual([m["name"] for m in s["maps"]], ["austria.pmtiles"])
+        self.assertEqual(s["disk"]["maps"], len(data))
+        self.assertEqual(self.json("DELETE", "/api/maps/austria.pmtiles")[0], 200)
+        self.assertEqual(self.json("GET", "/api/status")[1]["maps"], [])
+
+    def test_upload_map_note_and_builtin_replace(self):
+        status, r = self.json("GET", "/api/check?kind=map&file=czechia.pmtiles&size=10")
+        self.assertEqual((status, r["exists"]), (200, "builtin"))
+        status, r = self.json("PUT", "/api/upload?kind=map&file=czechia.pmtiles", fixture_bytes(scheme=None))
+        self.assertEqual((status, r["result"]), (200, "replaced"))  # the built-in, like wiki books
+        self.assertIn("Getting more maps", r["note"])
+        flags = {b["name"]: b for b in self.json("GET", "/api/status")[1]["map_builtins"]}
+        self.assertTrue(flags["czechia.pmtiles"]["replaced"])
+
+    def test_upload_map_refused(self):
+        status, r = self.json("PUT", "/api/upload?kind=map&file=junk.pmtiles", b"x" * 300)
+        self.assertEqual(status, 400)
+        self.assertIn("not a PMTiles map", r["error"])
+        status, r = self.json("PUT", "/api/upload?kind=map&file=pic.pmtiles", fixture_bytes(tile_type=2))
+        self.assertIn("raster", r["error"])
+        self.assertEqual(self.json("PUT", "/api/upload?kind=map&file=a.mbtiles", b"x")[0], 400)
+        self.assertEqual(self.json("DELETE", "/api/maps/czechia.pmtiles")[0], 403)
+        self.assertEqual(self.json("GET", "/api/status")[1]["maps"], [])
+        self.assertEqual(list((self.maps_dir / ".incoming").iterdir()), [])
 
     def test_upload_wiki_roundtrip(self):
         status, r = self.json("PUT", "/api/upload?kind=wiki&file=Book_2026-01.zim", b"zimdata")
@@ -181,6 +252,29 @@ class LiteApi(Api):
         self.assertEqual(status, 400)
         self.assertIn("no AI models", r["error"])
         self.assertEqual(self.json("DELETE", "/api/models/m")[0], 400)
+
+
+class NoMapsApi(Api):
+    """A box without the maps service: no maps section, map uploads refused."""
+
+    maps_enabled = False
+
+    def test_status_shape(self):
+        s = self.json("GET", "/api/status")[1]
+        self.assertIsNone(s["maps"])
+        self.assertEqual(s["map_builtins"], [])
+
+    def test_page_has_maps_section(self):
+        self.assertNotIn(b'id="maps"', self.call("GET", "/")[1])
+
+    def test_upload_map_roundtrip(self):
+        status, r = self.json("PUT", "/api/upload?kind=map&file=a.pmtiles", fixture_bytes())
+        self.assertEqual(status, 400)
+        self.assertIn("no maps", r["error"])
+        self.assertEqual(self.json("DELETE", "/api/maps/a.pmtiles")[0], 400)
+
+    test_upload_map_note_and_builtin_replace = test_upload_map_roundtrip
+    test_upload_map_refused = test_upload_map_roundtrip
 
 
 if __name__ == "__main__":

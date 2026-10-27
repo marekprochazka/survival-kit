@@ -69,6 +69,20 @@ def model_name(filename):
     return clean_model_name(_stem(filename, ".gguf"))
 
 
+def map_name(filename):
+    """File name a map is stored under: <stem>.pmtiles, lower case, [a-z0-9._-] only.
+
+    The name is also how the map page tells maps apart, and an import replaces a
+    built-in map of the same name (world, central-europe, czechia).
+    """
+    stem = re.sub(r"[^a-z0-9._-]+", "-", _stem(filename, ".pmtiles").lower()).lstrip(".")
+    if not stem.strip("-._"):
+        raise Refused("this file name can't be used for a map")
+    if len(stem) > MAX_NAME:
+        raise Refused(f"this file name is too long (at most {MAX_NAME} characters)")
+    return stem + ".pmtiles"
+
+
 # --- space --------------------------------------------------------------------------
 
 
@@ -114,43 +128,51 @@ def receive(stream, length, incoming, chunk=1 << 20):
         raise Refused(f"could not save the upload: {e.strerror or e}") from e
 
 
-# --- wiki ---------------------------------------------------------------------------
+# --- wiki books and maps --------------------------------------------------------------
 
 
-class Wiki:
-    """Imported books in `zims` (Kiwix's drop-in dir) next to the built-in starter books.
+class Shelf:
+    """Imported files (`*<ext>` in `dir`) next to the built-in ones that came with the system.
 
-    builtins: file name → size of the books that come with the system (not deletable).
-    validate(path) → bool: can Kiwix read it?   refresh(): rebuild the catalog.
+    Wiki books (.zim, in Kiwix's drop-in dir) and maps (.pmtiles) work the same way.
+    builtins: file name → size of the built-in files (not deletable; an import of the same
+    name replaces one until it is deleted). protected: stems that can't even be replaced.
+    validate(path) → a note for the user or None; raises Refused when the file is unusable.
+    refresh(): tell the service that serves the files.  noun: "book", "map" (for messages).
     """
 
-    def __init__(self, zims, builtins, protected, validate, refresh):
-        self.zims = Path(zims)
+    def __init__(self, dir, ext, builtins, protected, validate, refresh, noun):
+        self.dir = Path(dir)
+        self.ext = ext
         self.builtins = dict(builtins)
         self.protected = set(protected)
         self.validate = validate
         self.refresh = refresh
+        self.noun = noun
 
     def _path(self, name):
-        if "/" in name or name.startswith(".") or not name.endswith(".zim"):
-            raise Refused("not a wiki book name")
-        return self.zims / name
+        if "/" in name or name.startswith(".") or not name.endswith(self.ext):
+            raise Refused(f"not a {self.noun} name")
+        return self.dir / name
+
+    def _stem(self, name):
+        return name[: -len(self.ext)]
 
     def items(self):
-        books = []
-        for p in sorted(self.zims.glob("*.zim")):
+        files = []
+        for p in sorted(self.dir.glob("*" + self.ext)):
             if p.is_file() and not p.name.startswith("."):
                 st = p.stat()
-                books.append({"name": p.name, "size": st.st_size, "mtime": int(st.st_mtime)})
-        return books
+                files.append({"name": p.name, "size": st.st_size, "mtime": int(st.st_mtime)})
+        return files
 
     def builtin_items(self):
         return [
             {
                 "name": name,
                 "size": size,
-                "replaced": (self.zims / name).is_file(),
-                "protected": name[: -len(".zim")] in self.protected,
+                "replaced": (self.dir / name).is_file(),
+                "protected": self._stem(name) in self.protected,
             }
             for name, size in sorted(self.builtins.items())
         ]
@@ -161,25 +183,26 @@ class Wiki:
         return "builtin" if name in self.builtins else None
 
     def install(self, tmp, name):
+        """Move a received upload into place; returns validate's note (or None)."""
         try:
             target = self._path(name)
-            if name[: -len(".zim")] in self.protected:
+            if self._stem(name) in self.protected:
                 raise Refused("the box's own manuals can't be replaced", status=403)
-            if not self.validate(tmp):
-                raise Refused("not a readable wiki book")
-            os.chmod(tmp, 0o644)  # kiwix-serve runs unprivileged
+            note = self.validate(tmp)
+            os.chmod(tmp, 0o644)  # kiwix-serve / nginx run unprivileged
             os.replace(tmp, target)  # atomic: same directory tree
         except BaseException:
             Path(tmp).unlink(missing_ok=True)  # whatever went wrong, no upload is left behind
             raise
         self.refresh()
+        return note
 
     def delete(self, name):
         path = self._path(name)
         if not path.is_file():
             if name in self.builtins:
-                raise Refused("built-in books can't be deleted", status=403)
-            raise Refused("no such book", status=404)
+                raise Refused(f"built-in {self.noun}s can't be deleted", status=403)
+            raise Refused(f"no such {self.noun}", status=404)
         path.unlink()
         self.refresh()
 
