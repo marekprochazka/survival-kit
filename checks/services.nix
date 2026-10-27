@@ -29,6 +29,14 @@ let
   # own books for the content manager (Kiwix lists a book once per internal ID)
   cmZim = mkTestZim "cm-test";
   replaceZim = mkTestZim "cm-replace";
+  # tiny stand-in maps (one empty tile each) — the VM test never needs the real 390 MB
+  mkTestMap =
+    name: zoom: box:
+    pkgs.runCommand "${name}.pmtiles" { } ''
+      ${pkgs.python3}/bin/python3 ${../modules/services/content/app/pmtiles_fixture.py} $out ${toString zoom} ${box}
+    '';
+  austriaMap = mkTestMap "austria" 12 "9.5,46.4,17.2,49.0";
+  czechiaMap = mkTestMap "czechia" 12 "12.0,48.5,18.9,51.1";
   # every https request trusts the box's own CA (as Firefox does via policy)
   curl = "curl --cacert /var/lib/survival-kit/tls/ca.crt";
 in
@@ -40,6 +48,10 @@ pkgs.testers.runNixOSTest {
     environment.systemPackages = [ pkgs.openssl ]; # test-only: inspect certificates
     # the content manager always keeps ≥ 2 GiB free; the default 1 GB test disk can't
     virtualisation.diskSize = 4096;
+    survivalKit.services.maps.builtins = {
+      world = mkTestMap "world" 5 "-180,-85,180,85";
+      czechia = czechiaMap;
+    };
     # no real model can run in the test VM: the chat and lookup talk to a stand-in
     survivalKit.services.chat.ollamaUrl = "http://127.0.0.1:11500";
     systemd.services.fake-ollama = {
@@ -202,6 +214,52 @@ pkgs.testers.runNixOSTest {
         r = machine.succeed("${curl} -s https://content.deck/api/upload?kind=model\\&file=junk.gguf -T /etc/hostname")
         assert "could not be added" in r and "panic" not in r and "main.go" not in r, r
         machine.succeed("test -z \"$(ls -A " + ZIMS + "/.incoming)\"")
+
+    with subtest("Maps: page, listings, byte ranges, import"):
+        MAPS = "${curl} -sf https://maps.deck"
+        MAPDIR = "/var/lib/survival-kit/maps"
+
+        def listed(folder):
+            return sorted(e["name"] for e in json.loads(machine.succeed(MAPS + "/" + folder + "/")))
+
+        def http_code(args):
+            return machine.succeed("${curl} -s -o /dev/null -w '%{http_code}' " + args).strip()
+
+        def upload_map(name, src):
+            return json.loads(machine.succeed("${curl} -s https://content.deck/api/upload?kind=map\\&file=" + name + " -T " + src))
+
+        assert "maps.js" in machine.succeed(MAPS + "/")
+        ctype = machine.succeed("${curl} -sfI https://maps.deck/vendor/maplibre/maplibre-gl.mjs")
+        assert "text/javascript" in ctype, ctype  # module scripts need a JavaScript type
+        assert listed("builtin") == ["czechia.pmtiles", "world.pmtiles"], listed("builtin")
+        assert http_code("-r 0-126 https://maps.deck/builtin/czechia.pmtiles") == "206", "byte ranges"
+        machine.succeed("${curl} -sf https://deck/health/maps")
+
+        r = upload_map("Austria.pmtiles", "${austriaMap}")
+        assert r.get("result") == "added", r
+        assert listed("imported") == ["austria.pmtiles"], listed("imported")
+
+        # a half-finished upload is never served nor listed
+        machine.succeed("mkdir -p " + MAPDIR + "/.incoming && echo x > " + MAPDIR + "/.incoming/partial")
+        assert http_code("https://maps.deck/imported/.incoming/partial") == "404"
+        assert listed("imported") == ["austria.pmtiles"], listed("imported")
+        machine.succeed("rm " + MAPDIR + "/.incoming/partial")
+
+        r = upload_map("junk.pmtiles", "/etc/hostname")
+        assert "not a PMTiles map" in r.get("error", ""), r
+        assert listed("imported") == ["austria.pmtiles"], listed("imported")
+
+        # an import named like a built-in replaces it; deleting brings the built-in back
+        r = upload_map("czechia.pmtiles", "${czechiaMap}")
+        assert r.get("result") == "replaced", r
+        flags = {m["name"]: m for m in json.loads(machine.succeed("${curl} -sf https://content.deck/api/status"))["map_builtins"]}
+        assert flags["czechia.pmtiles"]["replaced"], flags
+        assert listed("imported") == ["austria.pmtiles", "czechia.pmtiles"], listed("imported")
+        machine.succeed("${curl} -sf https://content.deck/api/maps/czechia.pmtiles -X DELETE")
+        machine.succeed("${curl} -sf https://content.deck/api/maps/austria.pmtiles -X DELETE")
+        assert listed("imported") == [], listed("imported")
+        assert http_code("-X DELETE https://content.deck/api/maps/world.pmtiles") == "403"
+        machine.succeed("test -z \"$(ls -A " + MAPDIR + "/.incoming)\"")
 
     with subtest("Wiki lookup, MCP and the wiki-first chat"):
         machine.wait_for_unit("survival-kit-lookup.service")
