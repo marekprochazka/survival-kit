@@ -32,8 +32,14 @@ let
           description = "Served at https://<subdomain>.<domain>.";
         };
         port = mkOption {
-          type = types.port;
-          description = "Port the service listens on (127.0.0.1 only).";
+          type = types.nullOr types.port;
+          default = null;
+          description = "Port the service listens on (127.0.0.1 only); null for a static site (see root).";
+        };
+        root = mkOption {
+          type = types.nullOr (types.either types.path types.str);
+          default = null;
+          description = "Static site: the directory nginx serves at https://<subdomain>.<domain> (instead of a port).";
         };
         title = mkOption {
           type = types.str;
@@ -53,7 +59,7 @@ let
         healthPath = mkOption {
           type = types.str;
           default = "/";
-          description = "Path probed by the dashboard via /health/<name>.";
+          description = "Path probed by the dashboard via /health/<name>; for a static site, a file under root (e.g. /index.html).";
         };
       };
     }
@@ -61,16 +67,26 @@ let
 
   names = lib.attrNames registry;
   subdomains = lib.mapAttrsToList (_: svc: svc.subdomain) registry;
-  # keys used by more than one entry, as "key (entry, entry)" — keyOf: entry → string
+  isStatic = svc: svc.root != null;
+  # keys used by more than one of `entries`, as "key (entry, entry)" — keyOf: entry → string
   clashes =
-    keyOf:
+    entries: keyOf:
     lib.mapAttrsToList (key: users: "${key} (${lib.concatStringsSep ", " users})") (
       lib.filterAttrs (_: users: lib.length users > 1) (
-        lib.groupBy' (users: name: users ++ [ name ]) [ ] (name: keyOf registry.${name}) names
+        lib.groupBy' (users: name: users ++ [ name ]) [ ] (name: keyOf entries.${name}) (
+          lib.attrNames entries
+        )
       )
     );
-  subdomainClashes = clashes (svc: lib.toLower svc.subdomain); # DNS ignores case
-  portClashes = clashes (svc: toString svc.port);
+  subdomainClashes = clashes registry (svc: lib.toLower svc.subdomain); # DNS ignores case
+  # static sites have no port
+  portClashes = clashes (lib.filterAttrs (_: svc: svc.port != null) registry) (
+    svc: toString svc.port
+  );
+  # exactly one of port (proxied service) / root (static site)
+  badShape = lib.filter (
+    name: (registry.${name}.port == null) == (registry.${name}.root == null)
+  ) names;
   # safe for URLs, nginx config and /etc/hosts
   isSafe = s: builtins.match "[a-z0-9-]+" s != null;
   unsafeNames = lib.filter (name: !(isSafe name && isSafe registry.${name}.subdomain)) names;
@@ -115,6 +131,10 @@ in
         message = "survivalKit.registry: duplicate port(s): ${lib.concatStringsSep "; " portClashes}";
       }
       {
+        assertion = badShape == [ ];
+        message = "survivalKit.registry: set exactly one of port (proxied service) or root (static site): ${lib.concatStringsSep ", " badShape}";
+      }
+      {
         assertion = onNginxPorts == [ ];
         message = "survivalKit.registry: port 80/443 is nginx's own — used by: ${lib.concatStringsSep ", " onNginxPorts}";
       }
@@ -140,9 +160,12 @@ in
           # same-origin health probes for the dashboard's JS (no CORS)
           locations = lib.mapAttrs' (
             name: svc:
-            lib.nameValuePair "= /health/${name}" {
-              proxyPass = "${upstream svc}${svc.healthPath}";
-            }
+            lib.nameValuePair "= /health/${name}" (
+              if isStatic svc then
+                { alias = "${svc.root}${svc.healthPath}"; } # 200 when the site's file is there
+              else
+                { proxyPass = "${upstream svc}${svc.healthPath}"; }
+            )
           ) registry;
         };
       }
@@ -151,10 +174,14 @@ in
         lib.nameValuePair (fqdn svc) (
           tlsVhost
           // {
-            locations."/" = {
-              proxyPass = upstream svc;
-              proxyWebsockets = true; # live updates (Vaultwarden sync, later Trilium, Jellyfin)
-            };
+            locations."/" =
+              if isStatic svc then
+                { inherit (svc) root; } # files from disk, no backend
+              else
+                {
+                  proxyPass = upstream svc;
+                  proxyWebsockets = true; # live updates (Vaultwarden sync, later Trilium, Jellyfin)
+                };
           }
         )
       ) registry;

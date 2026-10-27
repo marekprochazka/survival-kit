@@ -55,6 +55,33 @@ let
       };
     }
   ];
+  siteRoot = pkgs.writeTextDir "index.html" "x";
+  staticSite = withModules [
+    {
+      survivalKit.registry.demo-static = {
+        root = siteRoot;
+        healthPath = "/index.html";
+      };
+    }
+  ];
+  staticVhosts = staticSite.services.nginx.virtualHosts;
+  bothSet = withModules [
+    {
+      survivalKit.registry.x = {
+        port = 9005;
+        root = "/srv/x";
+      };
+    }
+  ];
+  neitherSet = withModules [ { survivalKit.registry.x = { }; } ];
+  twoStatic = withModules [
+    {
+      survivalKit.registry = {
+        s1.root = "/srv/a";
+        s2.root = "/srv/b";
+      };
+    }
+  ];
   nginxPort = withModules [ { survivalKit.registry.x.port = 80; } ];
   badName = withModules [ { survivalKit.registry."my notes".port = 9013; } ];
   bareDomain = withModules [
@@ -100,6 +127,23 @@ assert lib.assertMsg (hasFailure dupSubdomain "a, b")
   "the duplicate message must name the clashing entries";
 assert lib.assertMsg (hasFailure nginxPort "port 80") "ports 80/443 belong to nginx";
 assert lib.assertMsg (hasFailure badName "my notes") "names/subdomains must be [a-z0-9-] only";
+assert lib.assertMsg (
+  staticVhosts."demo-static.deck".locations."/".root == siteRoot
+  && staticVhosts."demo-static.deck".locations."/".proxyPass == null
+) "a static entry's vhost serves its root from disk, no proxy";
+assert lib.assertMsg (
+  staticVhosts.deck.locations."= /health/demo-static".alias == "${siteRoot}/index.html"
+) "a static entry's health probe aliases the healthPath file under its root";
+assert lib.assertMsg (
+  failing staticSite == [ ]
+) "a valid static entry must not trip assertions: ${toString (failing staticSite)}";
+assert lib.assertMsg (hasFailure bothSet "exactly one of port")
+  "an entry with both port and root must fail the build";
+assert lib.assertMsg (hasFailure neitherSet "exactly one of port")
+  "an entry with neither port nor root must fail the build";
+assert lib.assertMsg (
+  !(hasFailure twoStatic "duplicate port")
+) "static sites have no port, so two of them never clash on one";
 assert lib.assertMsg (lib.all (
   v:
   v.forceSSL
