@@ -4,12 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Maps</title>
+<link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="maps.css">
 </head>
 <body>
-<main>
-<h1>Maps</h1>
-<p>The map page is being built.</p>
-</main>
+<div id="map" role="region" aria-label="Map"></div>
+<div id="ruler" hidden><span id="ruler-text">Click on the map to measure.</span>
+  <button type="button" id="ruler-clear">Clear</button></div>
+<p id="notice" hidden></p>
+<noscript><p id="notice">The map needs JavaScript.</p></noscript>
+<script src="vendor/pmtiles.js"></script>
+<script src="vendor/basemaps.js"></script>
+<script type="module" src="maps.js"></script>
 </body>
 </html>

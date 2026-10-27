@@ -1,0 +1,10 @@
+html, body { height: 100%; }
+body { padding: 0; }
+#map { position: fixed; inset: 0; }
+#notice { max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+.tools button { width: auto; padding: 0 .6rem; font: 600 .85rem system-ui, sans-serif; color: #1d2420; }
+.tools button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+#ruler { position: fixed; left: .6rem; bottom: 3rem; z-index: 2; max-width: calc(100% - 1.2rem);
+  padding: .4rem .6rem; background: var(--card); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; font-size: .9rem; }
+#ruler button { margin-left: .5rem; }
