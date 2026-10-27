@@ -63,12 +63,13 @@ function tiles(maps) {
   };
 }
 
-// one source + one copy of the Protomaps layers per map, English names where they exist
+// one source + one copy of the Protomaps layers per map, English names where they exist;
+// source ids are "map:<name>", so an imported grid.pmtiles can't clash with the page's own
 function style(maps) {
   const sources = {};
   let layers = [];
   for (const m of maps) {
-    sources[m.name] = {
+    sources[`map:${m.name}`] = {
       type: "vector",
       tiles: [`deck://${m.name}/{z}/{x}/{y}`],
       minzoom: m.minZoom,
@@ -76,7 +77,7 @@ function style(maps) {
       bounds: m.bounds,
     };
     const own = basemaps
-      .layers(m.name, basemaps.namedFlavor(flavor), { lang: "en" })
+      .layers(`map:${m.name}`, basemaps.namedFlavor(flavor), { lang: "en" })
       .filter((l) => l.type !== "background" || layers.length === 0); // one background
     layers = layers.concat(own.map((l) => ({ ...l, id: `${m.name}:${l.id}` })));
   }

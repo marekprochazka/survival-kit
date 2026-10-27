@@ -29,14 +29,10 @@ let
   # own books for the content manager (Kiwix lists a book once per internal ID)
   cmZim = mkTestZim "cm-test";
   replaceZim = mkTestZim "cm-replace";
-  # tiny stand-in maps (one empty tile each) — the VM test never needs the real 390 MB
-  mkTestMap =
-    name: zoom: box:
-    pkgs.runCommand "${name}.pmtiles" { } ''
-      ${pkgs.python3}/bin/python3 ${../modules/services/content/app/pmtiles_fixture.py} $out ${toString zoom} ${box}
-    '';
-  austriaMap = mkTestMap "austria" 12 "9.5,46.4,17.2,49.0";
-  czechiaMap = mkTestMap "czechia" 12 "12.0,48.5,18.9,51.1";
+  # stand-in maps to upload (the node's built-in maps are stand-ins too, see host-node.nix)
+  testMaps = import ./test-maps.nix { inherit pkgs; };
+  austriaMap = testMaps.austria;
+  czechiaMap = testMaps.czechia;
   # every https request trusts the box's own CA (as Firefox does via policy)
   curl = "curl --cacert /var/lib/survival-kit/tls/ca.crt";
 in
@@ -48,10 +44,6 @@ pkgs.testers.runNixOSTest {
     environment.systemPackages = [ pkgs.openssl ]; # test-only: inspect certificates
     # the content manager always keeps ≥ 2 GiB free; the default 1 GB test disk can't
     virtualisation.diskSize = 4096;
-    survivalKit.services.maps.builtins = {
-      world = mkTestMap "world" 5 "-180,-85,180,85";
-      czechia = czechiaMap;
-    };
     # no real model can run in the test VM: the chat and lookup talk to a stand-in
     survivalKit.services.chat.ollamaUrl = "http://127.0.0.1:11500";
     systemd.services.fake-ollama = {

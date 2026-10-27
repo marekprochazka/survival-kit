@@ -3,7 +3,10 @@
 { pkgs, self, ... }:
 let
   lite = self.nixosConfigurations.survival-kit.extendModules {
-    modules = [ { survivalKit.profile = "lite"; } ];
+    modules = [
+      { survivalKit.profile = "lite"; }
+      (import ./test-maps.nix { inherit pkgs; }).module # no need for the real maps here
+    ];
   };
   info = pkgs.closureInfo { rootPaths = [ lite.config.system.build.toplevel ]; };
 in

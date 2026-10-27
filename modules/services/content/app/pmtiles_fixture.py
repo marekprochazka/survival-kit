@@ -13,6 +13,7 @@ from pathlib import Path
 
 HEADER = struct.Struct("<7sB11Q6B4iB2i")  # same layout as pmtiles.py
 GZIP = 2
+PROTOMAPS_LAYERS = ["boundaries", "buildings", "earth", "landcover", "landuse", "places", "pois", "roads", "transit", "water"]
 
 
 def _varint(n):
@@ -25,11 +26,18 @@ def _varint(n):
 
 
 def write(path, *, version=3, tile_type=1, scheme="4.15.2", bounds=(12.0, 48.5, 18.9, 51.1),
-          max_zoom=12, truncate=False):
+          max_zoom=12, truncate=False, layers=PROTOMAPS_LAYERS, internal=GZIP, tile_compression=GZIP,
+          missing_leaves=0):
+    """layers: vector layer ids in the description (None: no vector_layers at all).
+    internal / tile_compression: the header's compression codes (only gzip is really written).
+    missing_leaves: declare a leaf-directory section of that many bytes after the tiles, but
+    don't write it (a copy cut off at the very end)."""
     tile = gzip.compress(b"", mtime=0)  # an MVT with no layers
     # root directory, one entry: tile id 0 (z0/0/0), run length 1, length, offset 0 (+1)
     root = gzip.compress(_varint(1) + _varint(0) + _varint(1) + _varint(len(tile)) + _varint(1), mtime=0)
-    meta = {"name": "test map", "vector_layers": []}
+    meta = {"name": "test map"}
+    if layers is not None:
+        meta["vector_layers"] = [{"id": i, "fields": {}} for i in layers]
     if scheme is not None:
         meta["version"] = scheme
     metadata = gzip.compress(json.dumps(meta).encode(), mtime=0)
@@ -39,9 +47,9 @@ def write(path, *, version=3, tile_type=1, scheme="4.15.2", bounds=(12.0, 48.5, 
     e7 = [round(v * 1e7) for v in bounds]
     header = HEADER.pack(
         b"PMTiles", version,
-        root_off, len(root), meta_off, len(metadata), data_off + len(tile), 0, data_off, len(tile),
+        root_off, len(root), meta_off, len(metadata), data_off + len(tile), missing_leaves, data_off, len(tile),
         1, 1, 1,  # addressed tiles, tile entries, tile contents
-        1, GZIP, GZIP, tile_type, 0, max_zoom,  # clustered, compressions, type, zooms
+        1, internal, tile_compression, tile_type, 0, max_zoom,  # clustered, compressions, type, zooms
         *e7, 0, round((bounds[0] + bounds[2]) / 2 * 1e7), round((bounds[1] + bounds[3]) / 2 * 1e7),
     )
     data = header + root + metadata + tile

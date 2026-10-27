@@ -81,9 +81,15 @@ build exactly the same ISO, copy `tmp/maps/*.pmtiles` over and add them with
 `nix-store --add-fixed sha256 <file>` instead. (Once there is a place to publish them, the
 three files can be hosted and fetched by URL — only `builtins.nix` changes.)
 
-VM tests never need the real maps: `checks/services.nix` sets
-`survivalKit.services.maps.builtins` to tiny stand-ins made by
-`modules/services/content/app/pmtiles_fixture.py`.
+Tests never need the real maps: `checks/test-maps.nix` sets
+`survivalKit.services.maps.builtins` to tiny stand-ins (made by
+`modules/services/content/app/pmtiles_fixture.py`) for every VM test (through
+`checks/host-node.nix`) and for `lite-closure`. Only a real system build and the ISO need
+the maps in the store.
+
+Imports should be cut with `--bbox` (as the manual says): the page trusts a map's
+`bounds` — a map cut to an irregular `--region`, or one with missing tiles inside its box,
+leaves holes where the coarser map has already handed its tiles over.
 
 ## Updating MapLibre, pmtiles.js, the style or the assets
 

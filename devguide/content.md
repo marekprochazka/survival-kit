@@ -48,9 +48,11 @@ the page's dialogs are only for the person.
 - **Maps:** `.pmtiles` only, stored lower-case with `[a-z0-9._-]`; an import named like a
   built-in map replaces it on the map page (which prefers `/imported/`), deleting it
   brings the built-in back. `pmtiles.py` checks before the move: PMTiles **v3**, tile type
-  **vector**, file not shorter than the header says, and the description's `version`
-  major = `MAP_SCHEME` (4, the Protomaps scheme the bundled style draws). Raster maps,
-  other versions and cut-off files are refused; a map without a `version` is accepted
+  **vector**, compression none or gzip (all pmtiles.js reads), file not shorter than any
+  section the header declares, the Protomaps layers (`earth`, `water`, `roads`, `places`)
+  in the description, and its `version` major = `MAP_SCHEME` (4, the Protomaps scheme the
+  bundled style draws). Anything else is refused — such a map would draw nothing yet take
+  its area away from the built-in maps; a Protomaps map without a `version` is accepted
   with a note. Nothing restarts — nginx lists the folder.
 - **Models:** `.gguf` only; name from the file name (editable), Ollama-safe; added with
   `ollama create` from a temp Modelfile (as by hand), then the upload is deleted.

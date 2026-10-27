@@ -32,9 +32,9 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 - `content-unit` runs the content manager's Python tests (`unittest`, stdlib) — names,
   space, uploads, the map-file check, the HTTP API on a real local server — with stand-ins
   for Kiwix/Ollama.
-- **Maps** in the `services` VM test use tiny stand-in map files
-  (`survivalKit.services.maps.builtins`, made by `pmtiles_fixture.py`), so tests never need
-  the real built-in maps (see [Maps](maps.html)). The map page itself (browser JavaScript)
+- **Maps:** every VM test and `lite-closure` use tiny stand-in map files
+  (`checks/test-maps.nix`, made by `pmtiles_fixture.py`), so `nix flake check` never needs
+  the real built-in maps — only a real system build and the ISO do (see [Maps](maps.html)). The map page itself (browser JavaScript)
   has no unit tests — it is checked by hand.
 - `lookup-unit` / `chat-unit`: the wiki lookup (fixtures = real Kiwix output) and the chat
   (storage, queue, pipeline, events on a real local server) with stand-ins. The `services` VM

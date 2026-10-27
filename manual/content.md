@@ -30,9 +30,10 @@ newer Arch Wiki replaces the built-in one, after you confirm. Delete the import 
 built-in one is back. The box's own manuals can't be replaced. **Maps** work the same way:
 a map named like a built-in one (`czechia.pmtiles`) replaces it until you delete the import.
 
-**Maps are checked** before they are added: the file must be a PMTiles *vector* map made
-for Protomaps version 4 (what this box draws). Picture (raster) maps, other versions and
-files cut off while copying are refused with the reason.
+**Maps are checked** before they are added: the file must be a Protomaps *vector* map in
+PMTiles format, version 4 (what this box draws). Picture (raster) maps, maps from other
+map makers (e.g. OpenMapTiles), other versions and files cut off while copying are refused
+with the reason.
 
 ## Deleting and disk space
 
