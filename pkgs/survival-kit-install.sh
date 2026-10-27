@@ -107,7 +107,7 @@ fi
 # the owner decides
 echo
 echo "Profile:"
-echo "  lite — wiki, passwords; for low RAM or a slow CPU"
+echo "  lite — wiki, maps, passwords; for low RAM or a slow CPU"
 echo "  full — adds local AI; needs at least 8 GB RAM"
 while true; do
   read -rp "Profile (lite or full): " profile
