@@ -6,6 +6,6 @@ pkgs.runCommand "content-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   cp -r ${../modules/services/content/app} app
   chmod -R u+w app
   cd app
-  python3 -m unittest -v test_content test_pmtiles test_server 2>&1
+  python3 -m unittest -v test_content test_pmtiles test_server test_locations 2>&1
   touch $out
 ''

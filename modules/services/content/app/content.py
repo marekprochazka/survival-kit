@@ -35,12 +35,12 @@ def _stem(filename, ext):
     return base[: -len(ext)]
 
 
-def wiki_name(filename, protected):
+def wiki_name_plain(filename):
     """File name a wiki book is stored under: <clean stem>.zim.
 
     Kiwix's date suffix (_YYYY-MM) is dropped, so a newer download keeps the book's
     address (/content/<stem>) and replaces the older one. Unsafe characters become "_";
-    leading dots are dropped (no hidden files). The box's own manuals are refused.
+    leading dots are dropped (no hidden files).
     """
     stem = _stem(filename, ".zim")
     stem = re.sub(r"_\d{4}-\d{2}$", "", stem)
@@ -49,9 +49,15 @@ def wiki_name(filename, protected):
         raise Refused("this file name can't be used for a wiki book")
     if len(stem) > MAX_NAME:
         raise Refused(f"this file name is too long (at most {MAX_NAME} characters)")
-    if stem in protected:
-        raise Refused(f"'{stem}' is the box's own manual and can't be replaced", status=403)
     return stem + ".zim"
+
+
+def wiki_name(filename, protected):
+    """wiki_name_plain for an upload: the box's own manuals are refused."""
+    name = wiki_name_plain(filename)
+    if name[:-4] in protected:
+        raise Refused(f"'{name[:-4]}' is the box's own manual and can't be replaced", status=403)
+    return name
 
 
 def clean_model_name(name):
