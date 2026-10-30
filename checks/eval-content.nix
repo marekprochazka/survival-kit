@@ -20,12 +20,17 @@ assert lib.assertMsg (svc.serviceConfig.ProtectSystem == "strict") "the service 
 assert lib.assertMsg (
   lib.sort lib.lessThan svc.serviceConfig.ReadWritePaths == [
     "/var/lib/survival-kit/content"
-    "/var/lib/survival-kit/data/maps"
-    "/var/lib/survival-kit/data/wiki"
+    "/var/lib/survival-kit/data"
+    "/var/lib/survival-kit/drives"
+    "/var/lib/survival-kit/set-aside"
   ]
-) "the service may write only to its own dir and this device's content tree";
+) "the service may write only to its own dir, the content trees and the set-aside dir";
 assert lib.assertMsg (
-  svc.environment.MAPS_DIR == "/var/lib/survival-kit/data/maps"
+  svc.environment.REGISTRY == "/var/lib/survival-kit/content/drives.json"
+  && svc.environment.DATA_DIR == "/var/lib/survival-kit/data"
+) "added drives are listed in the service's own dir; this device's tree";
+assert lib.assertMsg (
+  svc.environment.MAPS == "1"
   && svc.environment.MAP_SCHEME == "4"
   && svc.environment.MAP_BUILTINS_DIR == "${cfg.survivalKit.services.maps.builtinDir}"
 ) "maps section: imports dir, built-in maps, Protomaps scheme 4";

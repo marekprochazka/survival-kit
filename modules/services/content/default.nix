@@ -11,12 +11,11 @@ let
   cfg = config.survivalKit.services.content;
   kiwix = config.survivalKit.services.kiwix;
   port = 8300;
-  # this device's content tree (ADR-0006); the library links what is in use for the services
-  zims = "${config.survivalKit.storage.dataDir}/wiki";
+  # content lives on locations — this device and added drives (ADR-0006)
+  storage = config.survivalKit.storage;
   stateDir = "/var/lib/survival-kit/content";
   ollama = config.services.ollama.enable;
   maps = config.survivalKit.services.maps;
-  mapsDir = "${config.survivalKit.storage.dataDir}/maps";
   # the page + the dashboard's look
   static = pkgs.runCommand "content-static" { } ''
     mkdir $out
@@ -32,26 +31,30 @@ in
     systemd.services.survival-kit-content = {
       description = "survival-kit content manager";
       wantedBy = [ "multi-user.target" ];
-      # the library creates this device's tree; models need the local Ollama
+      # drives mounted and the library built first; models need the local Ollama
       after = [ "survival-kit-library.service" ] ++ lib.optional ollama "ollama.service";
       wants = [ "survival-kit-library.service" ] ++ lib.optional ollama "ollama.service";
       path = [
         pkgs.kiwix-tools # kiwix-manage: is an uploaded book readable?
-        config.systemd.package # systemctl restart kiwix-library
+        pkgs.util-linux # lsblk: which drives could be added
+        config.systemd.package # systemctl restart survival-kit-drives / -library / kiwix-library
       ]
       ++ lib.optional ollama config.services.ollama.package;
       environment = {
         CONTENT_PORT = toString port;
-        ZIMS_DIR = zims;
         STATE_DIR = stateDir;
+        DATA_DIR = storage.dataDir;
+        DRIVES_DIR = storage.drivesDir;
+        REGISTRY = storage.registryFile;
+        DRIVE_STATE = storage.driveStateFile;
+        STATE_FILE = storage.stateFile;
+        SET_ASIDE_DIR = storage.setAsideDir;
         STATIC_DIR = "${static}";
         BUILTINS_DIR = lib.optionalString (kiwix.starterDir != null) "${kiwix.starterDir}";
         PROTECTED = config.systemd.services.survival-kit-library.environment.PROTECTED;
         OLLAMA = if ollama then "1" else "0";
-        MODELS_DIR = config.services.ollama.models;
         LOOKUP_URL = lib.optionalString config.survivalKit.services.lookup.enable "http://127.0.0.1:8310";
-        # maps: imports land in this device's tree; the library links them for nginx
-        MAPS_DIR = lib.optionalString maps.enable mapsDir;
+        MAPS = if maps.enable then "1" else "0";
         MAP_BUILTINS_DIR = lib.optionalString maps.enable "${maps.builtinDir}";
         MAP_SCHEME = "4"; # Protomaps basemap version the bundled map style draws
         PYTHONUNBUFFERED = "1";
@@ -62,13 +65,14 @@ in
         ExecStart = "${pkgs.python3}/bin/python3 ${./app}/server.py";
         StateDirectory = "survival-kit/content";
         Restart = "on-failure";
-        # root (writes into the content tree, rebuilds the library) — but confined:
+        # root (writes into the content trees, rebuilds the library) — but confined:
         ProtectSystem = "strict";
         ReadWritePaths = [
-          zims
-          stateDir
-        ]
-        ++ lib.optional maps.enable mapsDir;
+          stateDir # incl. the list of added drives
+          storage.dataDir
+          storage.drivesDir # the added drives are mounted below it
+          storage.setAsideDir
+        ];
         ProtectHome = true;
         PrivateTmp = true;
         NoNewPrivileges = true;

@@ -25,7 +25,9 @@ in
     dataDir = constant "/var/lib/survival-kit/data" "This device's content tree.";
     drivesDir = constant "/var/lib/survival-kit/drives" "Added drives are mounted at <drivesDir>/<uuid>.";
     libraryDir = constant "/var/lib/survival-kit/library" "The merged index (a symlink, swapped atomically).";
-    registryFile = constant "/var/lib/survival-kit/drives.json" "The added drives (runtime data, no rebuild).";
+    # in the content manager's own dir: it rewrites the list (temp file + rename) there
+    registryFile = constant "/var/lib/survival-kit/content/drives.json" "The added drives (runtime data, no rebuild).";
+    setAsideDir = constant "/var/lib/survival-kit/set-aside" "Where auto-resolve moves this device's invalid and duplicate files.";
     stateFile = constant "/var/lib/survival-kit/library.json" "What is in use / duplicate / invalid, for the content manager.";
     driveStateFile = constant "/run/survival-kit/drives.json" "Which added drives are mounted right now.";
     cacheFile = constant "/var/lib/survival-kit/content/checks.json" "Remembered check results.";
@@ -46,6 +48,7 @@ in
         "d ${cfg.dataDir} 0755 root root -"
         "d ${cfg.drivesDir} 0755 root root -"
         "d ${dirOf cfg.cacheFile} 0755 root root -"
+        "d ${cfg.setAsideDir} 0755 root root -"
       ];
 
       # added drives: runtime data (drives.json), mounted by UUID; a missing one never fails boot

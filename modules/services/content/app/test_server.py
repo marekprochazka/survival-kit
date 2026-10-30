@@ -9,12 +9,19 @@ import urllib.request
 from pathlib import Path
 
 import content
+import drives as drv
+import locations
 import pmtiles
 import pmtiles_fixture
 import server
-from test_content import PROTECTED, FakeOllama
+from test_content import PROTECTED, Box, FakeOllama
 
 GB = 1000**3
+
+
+def usage(path):
+    """This device: 50 of 100 GB free; added drives: 3 of 10 GB."""
+    return (10 * GB, 3 * GB) if "/drives/" in str(path) else (100 * GB, 50 * GB)
 
 
 def fixture_bytes(**kw):
@@ -35,9 +42,10 @@ class Api(unittest.TestCase):
     maps_enabled = True
 
     def setUp(self):
-        root = Path(tempfile.mkdtemp())
-        self.zims = root / "zims"
-        (self.zims / ".incoming").mkdir(parents=True)
+        self.box = Box(usage=usage)
+        root = self.box.root
+        self.dev = self.box.device().root
+        self.zims = self.dev / "wiki"
         (root / "state" / "incoming").mkdir(parents=True)
         static = root / "static"
         static.mkdir()
@@ -45,24 +53,23 @@ class Api(unittest.TestCase):
         (static / "content.js").write_text("// js")
         (static / "style.css").write_text("/* css */")
         self.wiki = content.Shelf(
-            self.zims,
-            ".zim",
+            self.box.places,
+            "wiki",
             builtins={"devdocs_en_git.zim": 100, "survival-kit.zim": 50},
             protected=PROTECTED,
             validate=lambda p: None,
-            refresh=lambda: None,
+            refresh=self.box.rebuild,
             noun="book",
         )
-        self.maps_dir = root / "maps"
-        (self.maps_dir / ".incoming").mkdir(parents=True)
+        self.maps_dir = self.dev / "maps"
         maps = (
             content.Shelf(
-                self.maps_dir,
-                ".pmtiles",
+                self.box.places,
+                "maps",
                 builtins={"czechia.pmtiles": 100, "world.pmtiles": 10},
                 protected=set(),
                 validate=lambda p: pmtiles.check(p, 4),
-                refresh=lambda: None,
+                refresh=self.box.rebuild,
                 noun="map",
             )
             if self.maps_enabled
@@ -70,25 +77,46 @@ class Api(unittest.TestCase):
         )
         self.ollama = FakeOllama()
         models = content.Models(self.ollama) if self.models_enabled else None
-        config = server.Config(
-            port=0,
-            static_dir=static,
-            wiki_incoming=self.zims / ".incoming",
-            model_incoming=root / "state" / "incoming",
-            map_incoming=self.maps_dir / ".incoming",
-            locations={
-                "wiki": str(self.zims),
-                "models": "/var/lib/ollama/models",
-                "maps": str(self.maps_dir),
-            },
+        config = server.Config(port=0, static_dir=static, model_incoming=root / "state" / "incoming")
+        # drives: what lsblk would offer, and which are plugged in when the mount service runs
+        self.offered = []
+        self.plugged = set()
+        self.drives = server.Drives(
+            registry=drv.Registry(self.box.registry),
+            candidates=lambda: list(self.offered),
+            state=lambda: json.loads(self.box.drive_state.read_text()) if self.box.drive_state.exists() else {},
+            apply=self.mount_service,
         )
-        self.httpd = server.make_server(config, self.wiki, models, lambda: (100 * GB, 50 * GB), maps)
+        self.httpd = server.make_server(config, self.wiki, models, self.box.places, maps, self.drives)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
 
     def tearDown(self):
         self.httpd.shutdown()
         self.httpd.server_close()
+
+    def mount_service(self):
+        """Stands in for survival-kit-drives + the library: mount what is plugged in."""
+        state = {}
+        for d in self.drives.registry.drives():
+            if d["uuid"] in self.plugged:
+                locations.ensure_tree(self.box.root / "drives" / d["uuid"] / "survival-kit", d["name"])
+                state[d["uuid"]] = {"mounted": True, "error": None}
+            else:
+                state[d["uuid"]] = {"mounted": False, "error": "not connected"}
+        self.box.drive_state.write_text(json.dumps(state))
+        self.box.rebuild()
+
+    def offer(self, uuid, fstype="ext4", label="BIG", refusal=None):
+        self.offered.append({"uuid": uuid, "path": "/dev/sdb1", "label": label, "model": "USB", "size": 10 * GB,
+                             "fstype": fstype, "desktop": False, "refusal": refusal})
+        self.plugged.add(uuid)
+
+    def add_drive(self, uuid):
+        self.offer(uuid)
+        status, r = self.json("POST", f"/api/drives/add?uuid={uuid}")
+        self.assertEqual((status, r["mounted"]), (200, True), r)
+        return self.box.root / "drives" / uuid / "survival-kit"
 
     def call(self, method, path, data=None, headers=None):
         req = urllib.request.Request(self.base + path, data=data, method=method, headers=headers or {})
@@ -119,7 +147,7 @@ class Api(unittest.TestCase):
         self.assertEqual(s["disk"]["free"], 50 * GB)
         self.assertEqual(
             set(s),
-            {"disk", "wiki", "builtins", "maps", "map_builtins", "models", "models_error", "locations"},
+            {"disk", "wiki", "builtins", "maps", "map_builtins", "models", "models_error", "locations", "drives"},
         )
         self.assertIsNone(s["models_error"])
         self.assertEqual(s["models"], [])
@@ -160,7 +188,7 @@ class Api(unittest.TestCase):
         self.assertEqual(self.json("PUT", "/api/upload?kind=map&file=a.mbtiles", b"x")[0], 400)
         self.assertEqual(self.json("DELETE", "/api/maps/czechia.pmtiles")[0], 403)
         self.assertEqual(self.json("GET", "/api/status")[1]["maps"], [])
-        self.assertEqual(list((self.maps_dir / ".incoming").iterdir()), [])
+        self.assertEqual(list((self.dev / ".incoming").iterdir()), [])
 
     def test_upload_wiki_roundtrip(self):
         status, r = self.json("PUT", "/api/upload?kind=wiki&file=Book_2026-01.zim", b"zimdata")
@@ -200,7 +228,7 @@ class Api(unittest.TestCase):
     def test_long_name_refused_cleanly(self):
         status, r = self.json("PUT", "/api/upload?kind=wiki&file=" + "a" * 300 + ".zim", b"x")
         self.assertEqual(status, 400)
-        self.assertEqual(list((self.zims / ".incoming").iterdir()), [])
+        self.assertEqual(list((self.dev / ".incoming").iterdir()), [])
 
     def test_check_bad_size_refused(self):
         self.assertEqual(self.json("GET", "/api/check?kind=wiki&file=a.zim&size=lots")[0], 400)
@@ -242,7 +270,111 @@ class Api(unittest.TestCase):
         self.assertEqual(self.json("PUT", "/api/upload?kind=wiki&file=a.txt", b"x")[0], 400)
         self.assertEqual(self.json("DELETE", "/api/wiki/..%2Fx.zim")[0], 400)
         self.assertEqual(self.json("PUT", "/api/upload?kind=nope&file=a.zim", b"x")[0], 400)
-        self.assertEqual(list((self.zims / ".incoming").iterdir()), [])
+        self.assertEqual(list((self.dev / ".incoming").iterdir()), [])
+
+    # --- locations and drives (ADR-0006) ---
+
+    def test_upload_to_drive_location(self):
+        tree = self.add_drive("u-1")
+        status, r = self.json("PUT", "/api/upload?kind=wiki&file=book.zim&to=u-1", b"zimdata")
+        self.assertEqual((status, r["result"]), (200, "added"))
+        self.assertEqual((tree / "wiki" / "book.zim").read_bytes(), b"zimdata")
+        self.assertEqual(list((tree / ".incoming").iterdir()), [])
+        [item] = self.json("GET", "/api/status")[1]["wiki"]
+        self.assertEqual((item["location"], item["status"]), ("u-1", "in_use"))
+
+    def test_upload_unknown_location_refused(self):
+        status, r = self.json("PUT", "/api/upload?kind=wiki&file=book.zim&to=u-404", b"x")
+        self.assertEqual(status, 400)
+        self.assertIn("not connected", r["error"])
+
+    def test_space_checked_on_target_location(self):
+        self.add_drive("u-1")
+        size = 2 * GB  # fits this device (50 GB free), not the drive (3 GB free, 2 GiB kept)
+        self.assertEqual(self.json("GET", f"/api/check?kind=wiki&file=a.zim&size={size}")[0], 200)
+        status, r = self.json("GET", f"/api/check?kind=wiki&file=a.zim&size={size}&to=u-1")
+        self.assertEqual(status, 400)
+        self.assertIn("not enough space", r["error"])
+
+    def test_replace_removes_only_in_use_copy(self):
+        tree = self.add_drive("u-1")
+        (self.zims / "book.zim").write_bytes(b"device")
+        self.box.rebuild()
+        status, r = self.json("PUT", "/api/upload?kind=wiki&file=book.zim&to=u-1", b"new")
+        self.assertEqual(r["result"], "replaced")
+        self.assertFalse((self.zims / "book.zim").exists())
+        self.assertEqual((tree / "wiki" / "book.zim").read_bytes(), b"new")
+
+    def test_delete_only_clicked_copy(self):
+        tree = self.add_drive("u-1")
+        (self.zims / "book.zim").write_bytes(b"a")
+        (tree / "wiki" / "book.zim").write_bytes(b"b")
+        self.box.rebuild()
+        self.assertEqual(self.json("DELETE", "/api/wiki/book.zim?at=u-1&file=book.zim")[0], 200)
+        self.assertTrue((self.zims / "book.zim").exists())
+        self.assertFalse((tree / "wiki" / "book.zim").exists())
+
+    def test_resolve_moves_invalid_and_duplicates(self):
+        tree = self.add_drive("u-1")
+        (self.zims / "book.zim").write_bytes(b"a")
+        (tree / "wiki" / "book.zim").write_bytes(b"dup")
+        (tree / "wiki" / "survival-kit.zim").write_bytes(b"manual?")  # invalid: a manual's name
+        (tree / "wiki" / "keep.zim").write_bytes(b"k")
+        self.box.rebuild()
+        status, r = self.json("POST", "/api/resolve?at=u-1")
+        self.assertEqual((status, sorted(r["moved"])), (200, ["book.zim", "survival-kit.zim"]))
+        aside = list((tree.parent / "survival-kit-set-aside").glob("*/wiki/*"))
+        self.assertEqual(sorted(p.name for p in aside), ["book.zim", "survival-kit.zim"])
+        self.assertTrue((tree / "wiki" / "keep.zim").exists())
+        self.assertTrue((self.zims / "book.zim").exists())
+        statuses = {(i["location"], i["name"]): i["status"] for i in self.json("GET", "/api/status")[1]["wiki"]}
+        self.assertEqual(statuses, {("device", "book.zim"): "in_use", ("u-1", "keep.zim"): "in_use"})
+
+    def test_status_lists_locations_and_drives(self):
+        self.add_drive("u-1")
+        self.offer("u-2", label="OTHER")
+        s = self.json("GET", "/api/status")[1]
+        self.assertEqual([(loc["id"], loc["free"]) for loc in s["locations"]], [("device", 50 * GB), ("u-1", 3 * GB)])
+        [added] = s["drives"]["added"]
+        self.assertEqual((added["uuid"], added["name"], added["mounted"]), ("u-1", "BIG", True))
+        self.assertEqual([d["uuid"] for d in s["drives"]["available"]], ["u-2"])
+
+    def test_add_drive_refused_for_fat32(self):
+        self.offer("u-fat", fstype="vfat", refusal="FAT32 can't hold files over 4 GB — use exFAT, NTFS or ext4")
+        status, r = self.json("POST", "/api/drives/add?uuid=u-fat")
+        self.assertEqual(status, 400)
+        self.assertIn("FAT32", r["error"])
+        self.assertEqual(self.drives.registry.drives(), [])
+
+    def test_add_unknown_drive_refused(self):
+        self.assertEqual(self.json("POST", "/api/drives/add?uuid=u-404")[0], 404)
+        self.add_drive("u-1")
+        self.assertEqual(self.json("POST", "/api/drives/add?uuid=u-1")[0], 400)  # already added
+
+    def test_add_drive_name(self):
+        self.offer("u-1")
+        r = self.json("POST", "/api/drives/add?uuid=u-1&name=%20My%20%20big%20drive%20")[1]
+        self.assertEqual(r["name"], "My big drive")
+
+    def test_unplugged_drive_and_reconnect(self):
+        tree = self.add_drive("u-1")
+        (tree / "maps").mkdir(exist_ok=True)
+        (tree / "wiki" / "far.zim").write_bytes(b"far")
+        self.plugged.discard("u-1")
+        status, r = self.json("POST", "/api/drives/u-1/reconnect")
+        self.assertEqual((status, r["mounted"], r["error"]), (200, False, "not connected"))
+        self.assertEqual(self.json("GET", "/api/status")[1]["wiki"], [])
+        self.plugged.add("u-1")
+        self.assertTrue(self.json("POST", "/api/drives/u-1/reconnect")[1]["mounted"])
+        self.assertEqual([i["name"] for i in self.json("GET", "/api/status")[1]["wiki"]], ["far.zim"])
+
+    def test_forget_drive_keeps_files(self):
+        tree = self.add_drive("u-1")
+        (tree / "wiki" / "far.zim").write_bytes(b"far")
+        self.assertEqual(self.json("POST", "/api/drives/u-1/forget")[0], 200)
+        self.assertEqual(self.drives.registry.drives(), [])
+        self.assertTrue((tree / "wiki" / "far.zim").exists())
+        self.assertEqual(self.json("POST", "/api/drives/u-1/forget")[0], 404)
 
 
 class LiteApi(Api):

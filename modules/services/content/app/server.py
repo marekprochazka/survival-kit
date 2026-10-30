@@ -1,18 +1,25 @@
-"""survival-kit content manager — the web side (ADR-0004).
+"""survival-kit content manager — the web side (ADR-0004, ADR-0006).
 
 A small JSON API plus one page, on 127.0.0.1 behind nginx (https://content.<domain>).
 Uploads are one file per request with the raw file as the body (Python 3.13 has no cgi
 module, and this streams straight to disk). Standard library only.
 
+Content lives on locations: "device" (this device) and added drives (by filesystem UUID).
+
 API
-  GET    /health                               "ok"
-  GET    /api/status                           disk, wiki, builtins, maps, map_builtins,
-                                               models (null on lite), locations
-  GET    /api/check?kind=&file=&size=[&model=] stored name + whether it exists; space check
-  PUT    /api/upload?kind=&file=[&model=]      body = the file (Content-Length required);
-                                               kind = wiki | map | model
-  DELETE /api/wiki/<name>, /api/maps/<name>, /api/models/<name>
-  GET    /, /content.js, /style.css            the page
+  GET    /health                                  "ok"
+  GET    /api/status                              disk, locations, drives, wiki, builtins,
+                                                  maps, map_builtins, models (null on lite)
+  GET    /api/check?kind=&file=&size=[&to=][&model=]  stored name + whether it exists;
+                                                  space check on location `to` (default device)
+  PUT    /api/upload?kind=&file=[&to=][&model=]   body = the file (Content-Length required);
+                                                  kind = wiki | map | model (models: device)
+  DELETE /api/wiki/<name>[?at=&file=], /api/maps/<name>[?at=&file=], /api/models/<name>
+                                                  one copy: on location `at`, else the one in use
+  POST   /api/resolve?at=                         move that location's invalid and duplicate
+                                                  files out of the tree (set aside, not deleted)
+  POST   /api/drives/add?uuid=[&name=], /api/drives/<uuid>/forget, /api/drives/<uuid>/reconnect
+  GET    /, /content.js, /style.css               the page
 """
 
 import html
@@ -26,8 +33,10 @@ import urllib.request
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 
 import content
+import drives as drv
 import library
 import pmtiles
 from content import Refused
@@ -37,16 +46,28 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": 
 NO_MODELS = "no AI models on this box (lite profile)"
 NO_MAPS = "no maps on this box"
 MODELS_DOWN = "not available right now"
+MAX_DRIVE_NAME = 60
 
 
 @dataclass
 class Config:
     port: int
     static_dir: Path
-    wiki_incoming: Path
     model_incoming: Path
-    map_incoming: Path
-    locations: dict
+
+
+@dataclass
+class Drives:
+    """Added drives, as the server sees them (tests use stand-ins).
+
+    registry: drives.Registry; candidates() → drives.candidates(…); state() → {uuid:
+    {mounted, error}} from the last mount run; apply() → re-run the mounting, then the library.
+    """
+
+    registry: object
+    candidates: Callable
+    state: Callable
+    apply: Callable
 
 
 def _size(n):
@@ -64,14 +85,15 @@ def render(template, s):
         f'Wiki {_size(d["wiki"])}, maps {_size(d["maps"])}, AI models {_size(d["models"])}, '
         f"system and other {_size(max(rest, 0))}.</p>",
         "</section>",
-        f'<section id="wiki"><h2>Wiki books</h2><p class="where">{e(s["locations"]["wiki"])}</p>',
+        '<section id="wiki"><h2>Wiki books</h2>',
         "<table><tr><th>Book</th><th>Size</th><th>Imported</th><th></th></tr>",
     ]
     for b in s["wiki"]:
         day = time.strftime("%Y-%m-%d", time.localtime(b["mtime"]))
         out.append(
             f'<tr><td>{e(b["name"][:-4])}</td><td>{_size(b["size"])}</td><td>{day}</td>'
-            f'<td><button data-delete="wiki" data-name="{e(b["name"])}">Delete</button></td></tr>'
+            f'<td><button data-delete="wiki" data-name="{e(b["name"])}" data-at="{e(b["location"])}" '
+            f'data-file="{e(b["file"])}">Delete</button></td></tr>'
         )
     for b in s["builtins"]:
         note = "replaced by import" if b["replaced"] else "built in"
@@ -82,13 +104,14 @@ def render(template, s):
         '<label>or a folder <input type="file" data-import="wiki" webkitdirectory></label></p></section>'
     )
     if s["maps"] is not None:
-        out.append(f'<section id="maps"><h2>Maps</h2><p class="where">{e(s["locations"]["maps"])}</p>')
+        out.append('<section id="maps"><h2>Maps</h2>')
         out.append("<table><tr><th>Map</th><th>Size</th><th>Imported</th><th></th></tr>")
         for m in s["maps"]:
             day = time.strftime("%Y-%m-%d", time.localtime(m["mtime"]))
             out.append(
                 f'<tr><td>{e(m["name"][:-8])}</td><td>{_size(m["size"])}</td><td>{day}</td>'
-                f'<td><button data-delete="maps" data-name="{e(m["name"])}">Delete</button></td></tr>'
+                f'<td><button data-delete="maps" data-name="{e(m["name"])}" data-at="{e(m["location"])}" '
+                f'data-file="{e(m["file"])}">Delete</button></td></tr>'
             )
         for m in s["map_builtins"]:
             note = "replaced by import" if m["replaced"] else "built in"
@@ -98,7 +121,7 @@ def render(template, s):
             '<p><label>Import map files <input type="file" data-import="map" accept=".pmtiles" multiple></label></p></section>'
         )
     if s["models"] is not None:
-        out.append(f'<section id="models"><h2>AI models</h2><p class="where">{e(s["locations"]["models"])}</p>')
+        out.append('<section id="models"><h2>AI models</h2>')
         if s["models_error"]:
             out.append(f'<p class="error">AI models: {e(s["models_error"])} (is Ollama still starting?)</p>')
         out.append("<table><tr><th>Model</th><th>Size</th><th></th></tr>")
@@ -113,14 +136,13 @@ def render(template, s):
     return template.replace("<!--CONTENT-->", "\n".join(out))
 
 
-def make_server(config, wiki, models, disk, maps=None):
-    """disk() → (total, free) bytes of the filesystem holding the content.
-
-    models / maps: None when the box has no AI models (lite) / no maps service.
-    """
+def make_server(config, wiki, models, places, maps=None, drives=None):
+    """places: library.Places. models / maps / drives: None when the box has no AI models
+    (lite) / no maps service / no drive support (tests)."""
 
     def status():
-        total, free = disk()
+        device = places.get("device")
+        total, free = places.disk(device)
         # Ollama may be starting, crashed or out of memory: the wiki part must still work
         model_items, models_error = (None, None)
         if models:
@@ -128,41 +150,68 @@ def make_server(config, wiki, models, disk, maps=None):
                 model_items = models.items()
             except Exception:  # noqa: BLE001
                 model_items, models_error = [], MODELS_DOWN
+        locs = []
+        for loc in places.all():
+            t, f = places.disk(loc)
+            locs.append({"id": loc.id, "name": loc.name, "total": t, "free": f,
+                         "wiki": wiki.used(loc.id), "maps": maps.used(loc.id) if maps else 0})
         return {
             "disk": {
                 "total": total,
                 "free": free,
-                "wiki": wiki.used(),
-                "maps": maps.used() if maps else 0,
+                "wiki": wiki.used("device"),
+                "maps": maps.used("device") if maps else 0,
                 "models": sum(m["size"] for m in model_items or []),
             },
+            "locations": locs,
+            "drives": drive_status(),
             "wiki": wiki.items(),
             "builtins": wiki.builtin_items(),
             "maps": maps.items() if maps else None,
             "map_builtins": maps.builtin_items() if maps else [],
             "models": model_items,
             "models_error": models_error,
-            "locations": config.locations,
+        }
+
+    def drive_status():
+        if drives is None:
+            return {"added": [], "available": []}
+        state = drives.state()
+        added = drives.registry.drives()
+        known = {d["uuid"] for d in added}
+        return {
+            "added": [d | state.get(d["uuid"], {"mounted": False, "error": "not mounted yet"}) for d in added],
+            "available": [c for c in drives.candidates() if c["uuid"] not in known],
         }
 
     def target(q):
-        """(store, stored name, space factor, incoming dir) for a request's kind/file."""
+        """(store, stored name, space factor, incoming dir, location or None) for a request."""
         kind, file = q.get("kind", ""), q.get("file", "")
-        if kind == "wiki":
-            return wiki, content.wiki_name(file, wiki.protected), 1, config.wiki_incoming
-        if kind == "map":
-            if maps is None:
+        if kind in ("wiki", "map"):
+            store = wiki if kind == "wiki" else maps
+            if store is None:
                 raise Refused(NO_MAPS)
-            return maps, content.map_name(file), 1, config.map_incoming
+            name = content.wiki_name(file, wiki.protected) if kind == "wiki" else content.map_name(file)
+            loc = places.get(q.get("to") or "device")
+            return store, name, 1, loc.root / ".incoming", loc
         if kind == "model":
             if models is None:
                 raise Refused(NO_MODELS)
             name = content.model_name(file)  # also checks the .gguf extension
             if q.get("model"):
                 name = content.clean_model_name(q["model"])
-            # the upload and Ollama's own copy exist side by side for a moment
-            return models, name, 2, config.model_incoming
+            # models live on this device (Ollama's one store); the upload and Ollama's own
+            # copy exist side by side for a moment
+            return models, name, 2, config.model_incoming, None
         raise Refused("unknown kind")
+
+    def space(factor, size, loc):
+        total, free = places.disk(loc or places.get("device"))
+        content.check_space(factor * size, free, total)
+
+    def drive_named(uuid):
+        if drives is None or not any(d["uuid"] == uuid for d in drives.registry.drives()):
+            raise Refused("no such drive", status=404)
 
     class Handler(BaseHTTPRequestHandler):
         def send(self, code, body, ctype="application/json"):
@@ -198,12 +247,11 @@ def make_server(config, wiki, models, disk, maps=None):
             if path == "/api/check":
 
                 def check():
-                    store, name, factor, _ = target(q)
+                    store, name, factor, _, loc = target(q)
                     size = q.get("size", "0")
                     if not size.isdigit():
                         raise Refused("size must be a number of bytes")
-                    total, free = disk()
-                    content.check_space(factor * int(size), free, total)
+                    space(factor, int(size), loc)
                     self.send(200, {"name": name, "exists": store.exists(name)})
 
                 return self.route(check)
@@ -225,31 +273,30 @@ def make_server(config, wiki, models, disk, maps=None):
             def upload():
                 if path != "/api/upload":
                     raise Refused("not found", status=404)
-                store, name, factor, incoming = target(q)
+                store, name, factor, incoming, loc = target(q)
                 length = self.headers.get("Content-Length")
                 if length is None or not length.isdigit():
                     raise Refused("the upload needs a Content-Length")
-                total, free = disk()
-                content.check_space(factor * int(length), free, total)
+                space(factor, int(length), loc)
                 existed = store.exists(name)
                 tmp = content.receive(self.rfile, int(length), incoming)
-                note = store.install(tmp, name)
+                note = store.install(tmp, name, loc) if loc else store.install(tmp, name)
                 self.send(200, {"name": name, "result": "replaced" if existed else "added", "note": note})
 
             self.route(upload)
 
         def do_DELETE(self):
-            path, _ = self.parts()
+            path, q = self.parts()
 
             def delete():
                 kind, _, name = path.removeprefix("/api/").partition("/")
                 name = urllib.parse.unquote(name)
                 if kind == "wiki":
-                    wiki.delete(name)
+                    wiki.delete(name, q.get("at"), q.get("file"))
                 elif kind == "maps":
                     if maps is None:
                         raise Refused(NO_MAPS)
-                    maps.delete(name)
+                    maps.delete(name, q.get("at"), q.get("file"))
                 elif kind == "models":
                     if models is None:
                         raise Refused(NO_MODELS)
@@ -259,6 +306,57 @@ def make_server(config, wiki, models, disk, maps=None):
                 self.send(200, {"name": name, "result": "deleted"})
 
             self.route(delete)
+
+        def do_POST(self):
+            path, q = self.parts()
+
+            def resolve():
+                loc = places.get(q.get("at", ""))
+                entries = places.entries("wiki") + (places.entries("maps") if maps else [])
+                moved = library.set_aside(loc, entries, time.strftime("%Y-%m-%d"), places.setaside_root(loc))
+                wiki.refresh()
+                self.send(200, {"moved": moved})
+
+            def add():
+                if drives is None:
+                    raise Refused("no drive support here")
+                uuid = q.get("uuid", "")
+                if any(d["uuid"] == uuid for d in drives.registry.drives()):
+                    raise Refused("a drive with this ID is already added")
+                found = next((c for c in drives.candidates() if c["uuid"] == uuid), None)
+                if found is None:
+                    raise Refused("that drive is not plugged in (or is used by the system)", status=404)
+                if found["refusal"]:
+                    raise Refused(found["refusal"])
+                name = " ".join(q.get("name", "").split())[:MAX_DRIVE_NAME]
+                name = name or found["label"] or found["model"] or "Drive"
+                drives.registry.add(uuid, found["fstype"], name, time.strftime("%Y-%m-%d"))
+                drives.apply()
+                self.send(200, {"uuid": uuid, "name": name, "result": "added"} | drive_result(uuid))
+
+            def drive_action():
+                uuid, _, action = path.removeprefix("/api/drives/").partition("/")
+                drive_named(uuid)
+                if action == "forget":
+                    drives.registry.forget(uuid)
+                    drives.apply()
+                    return self.send(200, {"uuid": uuid, "result": "forgotten"})
+                if action == "reconnect":
+                    drives.apply()
+                    return self.send(200, {"uuid": uuid, "result": "reconnected"} | drive_result(uuid))
+                raise Refused("not found", status=404)
+
+            if path == "/api/resolve":
+                return self.route(resolve)
+            if path == "/api/drives/add":
+                return self.route(add)
+            if path.startswith("/api/drives/"):
+                return self.route(drive_action)
+            self.send(404, {"error": "not found"})
+
+    def drive_result(uuid):
+        s = drives.state().get(uuid, {"mounted": False, "error": "not mounted"})
+        return {"mounted": s["mounted"], "error": s["error"]}
 
     httpd = ThreadingHTTPServer(("127.0.0.1", config.port), Handler)
     httpd.daemon_threads = True
@@ -331,21 +429,27 @@ def _clear(directory):
         shutil.rmtree(p) if p.is_dir() else p.unlink()
 
 
+
+def drives_apply():
+    """Mount (or unmount) per the list of added drives, then rebuild the library."""
+    subprocess.run(["systemctl", "restart", "survival-kit-drives.service"], check=True)
+    kiwix_refresh()
+
+
 def main():
     env = os.environ
-    zims = Path(env["ZIMS_DIR"])
     state = Path(env["STATE_DIR"])
-    maps_dir = Path(env["MAPS_DIR"]) if env.get("MAPS_DIR") else None
     config = Config(
         port=int(env["CONTENT_PORT"]),
         static_dir=Path(env["STATIC_DIR"]),
-        wiki_incoming=zims / ".incoming",
         model_incoming=state / "incoming",
-        map_incoming=maps_dir / ".incoming" if maps_dir else state / "map-incoming",
-        locations={"wiki": str(zims), "models": env.get("MODELS_DIR", ""), "maps": str(maps_dir or "")},
     )
-    _clear(config.wiki_incoming)
+    places = library.Places(
+        env["DATA_DIR"], env["DRIVES_DIR"], env["REGISTRY"], env["DRIVE_STATE"], env["STATE_FILE"], env["SET_ASIDE_DIR"]
+    )
     _clear(config.model_incoming)
+    for loc in places.all():
+        _clear(loc.root / ".incoming")
 
     def sizes(var, ext):
         """name → size of the built-in files in the directory env[var] names (if any)."""
@@ -353,8 +457,8 @@ def main():
         return {p.name: p.stat().st_size for p in d.glob("*" + ext)} if d else {}
 
     wiki = content.Shelf(
-        zims,
-        ".zim",
+        places,
+        "wiki",
         builtins=sizes("BUILTINS_DIR", ".zim"),
         protected=set(env.get("PROTECTED", "").split()),
         validate=wiki_check,
@@ -362,25 +466,26 @@ def main():
         noun="book",
     )
     maps = None
-    if maps_dir:
-        _clear(config.map_incoming)
+    if env.get("MAPS") == "1":
         scheme = int(env.get("MAP_SCHEME", "4"))
         maps = content.Shelf(
-            maps_dir,
-            ".pmtiles",
+            places,
+            "maps",
             builtins=sizes("MAP_BUILTINS_DIR", ".pmtiles"),
             protected=set(),
             validate=lambda path: pmtiles.check(path, scheme),
-            refresh=library_refresh,  # nginx serves the library's links; the page reloads it
+            refresh=kiwix_refresh,  # the library links maps too; the page reloads it
             noun="map",
         )
     models = content.Models(Ollama(config.model_incoming)) if env.get("OLLAMA") == "1" else None
+    drives = Drives(
+        registry=drv.Registry(env["REGISTRY"]),
+        candidates=lambda: drv.candidates(drv.read_lsblk(), env["DRIVES_DIR"]),
+        state=lambda: library._json(env["DRIVE_STATE"], {}),
+        apply=drives_apply,
+    )
 
-    def disk():
-        u = shutil.disk_usage(zims)
-        return u.total, u.free
-
-    httpd = make_server(config, wiki, models, disk, maps)
+    httpd = make_server(config, wiki, models, places, maps, drives)
     print(f"content manager on 127.0.0.1:{config.port}", flush=True)
     httpd.serve_forever()
 

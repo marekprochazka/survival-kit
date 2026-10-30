@@ -1,17 +1,60 @@
 """Unit tests for content.py — names, space, uploads, wiki, maps and models (no HTTP, no VM)."""
 
 import io
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 
 import content
+import library
+import locations
 from content import Refused
 
 GB = 1000**3
 GIB = 1024**3
 PROTECTED = {"survival-kit", "survival-kit-dev"}
+
+
+def ok_check(path, kind):
+    return {"ok": True, "reason": None, "date": None}
+
+
+class Box:
+    """This device + optional added drives in a temp folder, with a real library state."""
+
+    def __init__(self, usage=lambda p: (100 * GB, 50 * GB), check=ok_check):
+        self.root = Path(tempfile.mkdtemp())
+        self.check = check
+        locations.ensure_tree(self.root / "data", "This device")
+        self.registry = self.root / "drives.json"
+        self.drive_state = self.root / "run-drives.json"
+        self.places = library.Places(
+            self.root / "data", self.root / "drives", self.registry, self.drive_state,
+            self.root / "library.json", self.root / "set-aside", usage=usage,
+        )
+        self.rebuild()
+
+    def rebuild(self):
+        locs = self.places.all()
+        entries = {k: library.resolve(locs, k, self.check, PROTECTED) for k in ("wiki", "maps")}
+        library.write_state(entries, self.places.state_file)
+
+    def add_drive(self, uuid, name="Drive", mounted=True):
+        """A drive as the mount service leaves it: listed, mounted, tree created."""
+        drives = json.loads(self.registry.read_text()) if self.registry.exists() else []
+        drives.append({"uuid": uuid, "fstype": "ext4", "name": name, "added": "2026-10-30"})
+        self.registry.write_text(json.dumps(drives))
+        state = json.loads(self.drive_state.read_text()) if self.drive_state.exists() else {}
+        state[uuid] = {"mounted": mounted, "error": None if mounted else "not connected"}
+        self.drive_state.write_text(json.dumps(state))
+        locations.ensure_tree(self.root / "drives" / uuid / "survival-kit", name)
+        self.rebuild()
+        return self.places.get(uuid) if mounted else None
+
+    def device(self):
+        return self.places.get("device")
 
 
 class Names(unittest.TestCase):
@@ -102,22 +145,24 @@ class Receive(unittest.TestCase):
 
 class WikiTest(unittest.TestCase):
     def setUp(self):
-        self.zims = Path(tempfile.mkdtemp())
-        self.incoming = self.zims / ".incoming"
-        self.incoming.mkdir()
+        self.box = Box()
+        self.dev = self.box.device()
+        self.zims = self.dev.root / "wiki"
+        self.incoming = self.dev.root / ".incoming"
         self.refreshed = 0
         self.readable = True
 
         def refresh():
             self.refreshed += 1
+            self.box.rebuild()
 
         def validate(path):
             if not self.readable:
                 raise Refused("not a readable wiki book")
 
         self.wiki = content.Shelf(
-            self.zims,
-            ".zim",
+            self.box.places,
+            "wiki",
             builtins={"devdocs_en_git.zim": 100, "survival-kit.zim": 50},
             protected=PROTECTED,
             validate=validate,
@@ -125,13 +170,13 @@ class WikiTest(unittest.TestCase):
             noun="book",
         )
 
-    def upload(self, data=b"zim"):
-        return content.receive(io.BytesIO(data), len(data), self.incoming)
+    def upload(self, data=b"zim", loc=None):
+        return content.receive(io.BytesIO(data), len(data), (loc or self.dev).root / ".incoming")
 
     def test_wiki_install_and_replace(self):
-        self.wiki.install(self.upload(b"one"), "book.zim")
+        self.wiki.install(self.upload(b"one"), "book.zim", self.dev)
         self.assertEqual(self.wiki.exists("book.zim"), "import")
-        self.wiki.install(self.upload(b"two!"), "book.zim")
+        self.wiki.install(self.upload(b"two!"), "book.zim", self.dev)
         self.assertEqual((self.zims / "book.zim").read_bytes(), b"two!")
         self.assertEqual([i["name"] for i in self.wiki.items()], ["book.zim"])
         self.assertEqual(self.wiki.used(), 4)
@@ -139,7 +184,7 @@ class WikiTest(unittest.TestCase):
     def test_wiki_unreadable_refused_and_removed(self):
         self.readable = False
         with self.assertRaises(Refused) as cm:
-            self.wiki.install(self.upload(), "bad.zim")
+            self.wiki.install(self.upload(), "bad.zim", self.dev)
         self.assertIn("not a readable wiki book", str(cm.exception))
         self.assertEqual(list(self.incoming.iterdir()), [])
         self.assertFalse((self.zims / "bad.zim").exists())
@@ -151,12 +196,54 @@ class WikiTest(unittest.TestCase):
         self.wiki.validate = broken
         tmp = self.upload()
         with self.assertRaises(RuntimeError):
-            self.wiki.install(tmp, "a.zim")
+            self.wiki.install(tmp, "a.zim", self.dev)
         self.assertEqual(list(self.incoming.iterdir()), [])
+
+    def test_install_to_drive_replaces_in_use_copy_on_device(self):
+        drive = self.box.add_drive("u-1")
+        self.wiki.install(self.upload(b"old"), "book.zim", self.dev)
+        self.wiki.install(self.upload(b"new", drive), "book.zim", drive)
+        self.assertFalse((self.zims / "book.zim").exists())
+        self.assertEqual((drive.root / "wiki" / "book.zim").read_bytes(), b"new")
+        [item] = self.wiki.items()
+        self.assertEqual((item["location"], item["status"]), ("u-1", "in_use"))
+
+    def test_replace_leaves_duplicates_alone(self):
+        d1 = self.box.add_drive("u-1")
+        d2 = self.box.add_drive("u-2")
+        (self.zims / "book.zim").write_bytes(b"in use")
+        (d1.root / "wiki" / "book.zim").write_bytes(b"duplicate")
+        self.box.rebuild()
+        self.wiki.install(self.upload(b"new", d2), "book.zim", d2)
+        self.assertFalse((self.zims / "book.zim").exists())  # the copy in use was replaced
+        self.assertEqual((d1.root / "wiki" / "book.zim").read_bytes(), b"duplicate")
+
+    def test_delete_only_the_copy_asked_for(self):
+        drive = self.box.add_drive("u-1")
+        (self.zims / "book.zim").write_bytes(b"a")
+        (drive.root / "wiki" / "book_2024-01.zim").write_bytes(b"b")
+        self.box.rebuild()
+        self.wiki.delete("book.zim", at="u-1", file="book_2024-01.zim")
+        self.assertTrue((self.zims / "book.zim").exists())
+        self.assertFalse((drive.root / "wiki" / "book_2024-01.zim").exists())
+        with self.assertRaises(Refused) as cm:
+            self.wiki.delete("book.zim", at="u-1")
+        self.assertEqual(cm.exception.status, 404)
+
+    def test_items_show_location_and_status(self):
+        drive = self.box.add_drive("u-1")
+        (self.zims / "book.zim").write_bytes(b"a")
+        (drive.root / "wiki" / "book.zim").write_bytes(b"b")
+        self.box.rebuild()
+        self.assertEqual(
+            [(i["location"], i["status"]) for i in self.wiki.items()],
+            [("device", "in_use"), ("u-1", "duplicate")],
+        )
+        self.assertEqual(self.wiki.used("u-1"), 1)
 
     def test_wiki_builtin_replaced_flag(self):
         self.assertEqual(self.wiki.exists("devdocs_en_git.zim"), "builtin")
-        self.wiki.install(self.upload(), "devdocs_en_git.zim")
+        self.wiki.install(self.upload(), "devdocs_en_git.zim", self.dev)
         flags = {b["name"]: b for b in self.wiki.builtin_items()}
         self.assertTrue(flags["devdocs_en_git.zim"]["replaced"])
         self.assertTrue(flags["survival-kit.zim"]["protected"])
@@ -173,13 +260,13 @@ class WikiTest(unittest.TestCase):
                 self.wiki.delete(bad)
 
     def test_wiki_refresh_called(self):
-        self.wiki.install(self.upload(), "a.zim")
+        self.wiki.install(self.upload(), "a.zim", self.dev)
         self.wiki.delete("a.zim")
         self.assertEqual(self.refreshed, 2)
 
     def test_wiki_items_skip_hidden_and_other(self):
         (self.zims / "notes.txt").write_text("x")
-        self.wiki.install(self.upload(), "a.zim")
+        self.wiki.install(self.upload(), "a.zim", self.dev)
         self.assertEqual([i["name"] for i in self.wiki.items()], ["a.zim"])
 
 
@@ -197,9 +284,10 @@ class MapNames(unittest.TestCase):
 
 class MapsTest(unittest.TestCase):
     def setUp(self):
-        self.dir = Path(tempfile.mkdtemp())
-        self.incoming = self.dir / ".incoming"
-        self.incoming.mkdir()
+        self.box = Box()
+        self.dev = self.box.device()
+        self.dir = self.dev.root / "maps"
+        self.incoming = self.dev.root / ".incoming"
         self.note = None
         self.usable = True
 
@@ -209,12 +297,12 @@ class MapsTest(unittest.TestCase):
             return self.note
 
         self.maps = content.Shelf(
-            self.dir,
-            ".pmtiles",
+            self.box.places,
+            "maps",
             builtins={"czechia.pmtiles": 100, "world.pmtiles": 10},
             protected=set(),
             validate=validate,
-            refresh=lambda: None,
+            refresh=self.box.rebuild,
             noun="map",
         )
 
@@ -223,7 +311,7 @@ class MapsTest(unittest.TestCase):
 
     def test_maps_shelf_replace_builtin_and_restore(self):
         self.assertEqual(self.maps.exists("czechia.pmtiles"), "builtin")
-        self.maps.install(self.upload(), "czechia.pmtiles")
+        self.maps.install(self.upload(), "czechia.pmtiles", self.dev)
         flags = {b["name"]: b for b in self.maps.builtin_items()}
         self.assertTrue(flags["czechia.pmtiles"]["replaced"])
         self.assertFalse(flags["world.pmtiles"]["protected"])
@@ -237,13 +325,13 @@ class MapsTest(unittest.TestCase):
     def test_maps_refused_file_removed(self):
         self.usable = False
         with self.assertRaises(Refused):
-            self.maps.install(self.upload(), "bad.pmtiles")
+            self.maps.install(self.upload(), "bad.pmtiles", self.dev)
         self.assertEqual(list(self.incoming.iterdir()), [])
         self.assertFalse((self.dir / "bad.pmtiles").exists())
 
     def test_maps_install_returns_note(self):
         self.note = "doubtful"
-        self.assertEqual(self.maps.install(self.upload(), "a.pmtiles"), "doubtful")
+        self.assertEqual(self.maps.install(self.upload(), "a.pmtiles", self.dev), "doubtful")
         self.assertEqual([i["name"] for i in self.maps.items()], ["a.pmtiles"])
 
     def test_maps_names_checked(self):

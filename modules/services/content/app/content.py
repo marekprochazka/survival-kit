@@ -137,83 +137,101 @@ def receive(stream, length, incoming, chunk=1 << 20):
 # --- wiki books and maps --------------------------------------------------------------
 
 
-class Shelf:
-    """Imported files (`*<ext>` in `dir`) next to the built-in ones that came with the system.
+ITEM = ("name", "file", "size", "mtime", "location", "status", "reason")
 
-    Wiki books (.zim, in Kiwix's drop-in dir) and maps (.pmtiles) work the same way.
+
+class Shelf:
+    """Wiki books (.zim) or maps (.pmtiles) on all locations, next to the built-in ones.
+
+    places: library.Places — the locations (this device, added drives) and the library's
+    last result: which copy of a name is in use, which are duplicates or invalid (ADR-0006).
     builtins: file name → size of the built-in files (not deletable; an import of the same
     name replaces one until it is deleted). protected: stems that can't even be replaced.
     validate(path) → a note for the user or None; raises Refused when the file is unusable.
-    refresh(): tell the service that serves the files.  noun: "book", "map" (for messages).
+    refresh(): rebuild the library and tell the services.  noun: "book", "map" (messages).
     """
 
-    def __init__(self, dir, ext, builtins, protected, validate, refresh, noun):
-        self.dir = Path(dir)
-        self.ext = ext
+    def __init__(self, places, kind, builtins, protected, validate, refresh, noun):
+        self.places = places
+        self.kind = kind  # the folder on every location: wiki/, maps/
+        self.ext = {"wiki": ".zim", "maps": ".pmtiles"}[kind]
         self.builtins = dict(builtins)
         self.protected = set(protected)
         self.validate = validate
         self.refresh = refresh
         self.noun = noun
 
-    def _path(self, name):
+    def _check(self, name):
         if "/" in name or name.startswith(".") or not name.endswith(self.ext):
             raise Refused(f"not a {self.noun} name")
-        return self.dir / name
 
     def _stem(self, name):
         return name[: -len(self.ext)]
 
+    def _in_use(self, name):
+        return next((e for e in self.places.entries(self.kind) if e["name"] == name and e["status"] == "in_use"), None)
+
     def items(self):
-        files = []
-        for p in sorted(self.dir.glob("*" + self.ext)):
-            if p.is_file() and not p.name.startswith("."):
-                st = p.stat()
-                files.append({"name": p.name, "size": st.st_size, "mtime": int(st.st_mtime)})
-        return files
+        """Every file on every location, with where it is and whether it is in use."""
+        return [{k: e[k] for k in ITEM} for e in self.places.entries(self.kind)]
 
     def builtin_items(self):
         return [
             {
                 "name": name,
                 "size": size,
-                "replaced": (self.dir / name).is_file(),
+                "replaced": self._in_use(name) is not None,
                 "protected": self._stem(name) in self.protected,
             }
             for name, size in sorted(self.builtins.items())
         ]
 
     def exists(self, name):
-        if self._path(name).is_file():
+        self._check(name)
+        if self._in_use(name):
             return "import"
         return "builtin" if name in self.builtins else None
 
-    def install(self, tmp, name):
-        """Move a received upload into place; returns validate's note (or None)."""
+    def install(self, tmp, name, loc):
+        """Move a received upload (in loc's .incoming/) into loc; returns validate's note.
+
+        It replaces the copy of this name in use — wherever that is; other copies (duplicates
+        on other locations) are left alone.
+        """
         try:
-            target = self._path(name)
+            self._check(name)
             if self._stem(name) in self.protected:
                 raise Refused("the box's own manuals can't be replaced", status=403)
             note = self.validate(tmp)
             os.chmod(tmp, 0o644)  # kiwix-serve / nginx run unprivileged
-            os.replace(tmp, target)  # atomic: same directory tree
+            target = loc.root / self.kind / name
+            old = self._in_use(name)
+            os.replace(tmp, target)  # atomic: same filesystem
         except BaseException:
             Path(tmp).unlink(missing_ok=True)  # whatever went wrong, no upload is left behind
             raise
+        if old and old["path"] != target:
+            old["path"].unlink(missing_ok=True)
         self.refresh()
         return note
 
-    def delete(self, name):
-        path = self._path(name)
-        if not path.is_file():
-            if name in self.builtins:
+    def delete(self, name, at=None, file=None):
+        """Delete one copy: the one on location `at` (named `file` there), else the one in use."""
+        self._check(name)
+        copies = [e for e in self.places.entries(self.kind) if e["name"] == name]
+        if at:
+            copies = [e for e in copies if e["location"] == at and (file is None or e["file"] == file)]
+        else:
+            copies = [e for e in copies if e["status"] == "in_use"]
+        if not copies:
+            if name in self.builtins and not at:
                 raise Refused(f"built-in {self.noun}s can't be deleted", status=403)
             raise Refused(f"no such {self.noun}", status=404)
-        path.unlink()
+        copies[0]["path"].unlink(missing_ok=True)
         self.refresh()
 
-    def used(self):
-        return sum(b["size"] for b in self.items())
+    def used(self, at=None):
+        return sum(e["size"] for e in self.items() if at is None or e["location"] == at)
 
 
 # --- models -------------------------------------------------------------------------

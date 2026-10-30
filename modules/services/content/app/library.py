@@ -20,6 +20,7 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from content import Refused
 from locations import Location, ensure_tree, scan
 
 DEVICE_NAME = "This device"
@@ -83,7 +84,6 @@ def kiwix_book(path):
 def real_check(scheme):
     """check(path, kind) with the upload checks: Kiwix for books, pmtiles.check for maps."""
     import pmtiles  # noqa: PLC0415 — only the real run needs it
-    from content import Refused  # noqa: PLC0415
 
     def check(path, kind):
         if kind == "wiki":
@@ -216,6 +216,52 @@ def _state_entry(e):
     return {k: e[k] for k in keep} | {"path": str(e["path"])}
 
 
+def write_state(entries_by_kind, path):
+    """The library's result for the content manager: {kind: [entry]} as JSON, atomically."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps({k: [_state_entry(e) for e in v] for k, v in entries_by_kind.items()}))
+    tmp.chmod(0o644)
+    os.replace(tmp, path)
+
+
+class Places:
+    """The locations as the content manager sees them, and the library's last result.
+
+    usage(path) → (total, free) bytes of the filesystem holding path.
+    """
+
+    def __init__(self, data_dir, drives_dir, registry_file, drive_state_file, state_file, setaside_dir, usage=None):
+        self.data_dir = Path(data_dir)
+        self.drives_dir = Path(drives_dir)
+        self.registry_file = registry_file
+        self.drive_state_file = drive_state_file
+        self.state_file = Path(state_file)
+        self.setaside_dir = Path(setaside_dir)
+        self.usage = usage or (lambda p: (shutil.disk_usage(p).total, shutil.disk_usage(p).free))
+
+    def all(self):
+        return current_locations(self.data_dir, self.drives_dir, self.registry_file, self.drive_state_file)
+
+    def get(self, id):
+        for loc in self.all():
+            if loc.id == id:
+                return loc
+        raise Refused("that drive is not connected")
+
+    def entries(self, kind):
+        """The library's entries of one kind, with path as a Path and kind set."""
+        items = _json(self.state_file, {}).get(kind, [])
+        return [e | {"path": Path(e["path"]), "kind": kind} for e in items]
+
+    def disk(self, loc):
+        return self.usage(loc.root)
+
+    def setaside_root(self, loc):
+        """Where auto-resolve moves files: the same filesystem as the location."""
+        return self.setaside_dir if loc.id == "device" else loc.root.parent / "survival-kit-set-aside"
+
+
 def main():
     env = os.environ
     ensure_tree(env["DATA_DIR"], DEVICE_NAME)
@@ -225,11 +271,7 @@ def main():
     entries = {kind: resolve(locs, kind, check, protected) for kind in ("wiki", "maps")}
     build_index(entries, env["LIBRARY_DIR"])
     check.save()
-    state = Path(env["STATE_FILE"])
-    tmp = state.with_name(f".{state.name}.tmp")
-    tmp.write_text(json.dumps({k: [_state_entry(e) for e in v] for k, v in entries.items()}))
-    tmp.chmod(0o644)
-    os.replace(tmp, state)
+    write_state(entries, env["STATE_FILE"])
     for kind, v in entries.items():
         bad = [e for e in v if e["status"] != "in_use"]
         print(f"library: {kind}: {len(v) - len(bad)} in use, {len(bad)} not in use", flush=True)
