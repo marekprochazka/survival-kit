@@ -20,7 +20,6 @@ import json
 import os
 import shutil
 import subprocess
-import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -29,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import content
+import library
 import pmtiles
 from content import Refused
 
@@ -268,16 +268,9 @@ def make_server(config, wiki, models, disk, maps=None):
 # --- the real helpers (used by main; tests use stand-ins) ----------------------------
 
 
-def kiwix_validate(path):
-    """Can Kiwix read it? Adding it to a throw-away catalog is Kiwix's own check."""
-    with tempfile.TemporaryDirectory() as d:
-        r = subprocess.run(["kiwix-manage", f"{d}/library.xml", "add", str(path)], capture_output=True)
-        return r.returncode == 0
-
-
 def wiki_check(path):
     """The wiki shelf's validate: Refused unless Kiwix can read the book."""
-    if not kiwix_validate(path):
+    if library.kiwix_book(path) is None:
         raise Refused("not a readable wiki book")
 
 

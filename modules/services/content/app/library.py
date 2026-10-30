@@ -1,0 +1,241 @@
+"""The library — one merged, checked view of the content on all locations (ADR-0006).
+
+Services don't know about locations: they read /var/lib/survival-kit/library/{wiki,maps},
+a folder of symlinks to the copy in use of every book and map. Files already on a
+location get the same checks as uploads; a failing one is "invalid", the older copy of a
+name on two locations is a "duplicate" — both stay where they are, not in use, until
+auto-resolve (set_aside) moves them out of the tree. Standard library only.
+
+Run as a program (survival-kit-library.service, at boot and after every change): rebuild
+the index and the state file the content manager shows.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+from locations import Location, ensure_tree, scan
+
+DEVICE_NAME = "This device"
+
+
+# --- what is in use -------------------------------------------------------------------
+
+
+def _winner(copies):
+    """The copy of a name to use: the newest when every copy has a date, else by order."""
+    by_order = sorted(copies, key=lambda e: e["order"])
+    if all(e["date"] for e in copies):
+        return sorted(by_order, key=lambda e: e["date"], reverse=True)[0]  # stable: ties by order
+    return by_order[0]
+
+
+def resolve(locs, kind, check, protected):
+    """Every file of `kind` on `locs`, each with status in_use | duplicate | invalid.
+
+    check(path, kind) → {"ok", "reason", "date"}. Entries are scan()'s plus kind, order,
+    status, reason and date.
+    """
+    entries = []
+    for loc in sorted(locs, key=lambda loc: loc.order):
+        for e in scan(loc, kind):
+            e.update(kind=kind, order=loc.order, date=None, reason=None)
+            if e["refusal"]:
+                e.update(status="invalid", reason=e["refusal"])
+            elif kind == "wiki" and e["name"][:-4] in protected:
+                e.update(status="invalid", reason="the box's own manual can't be replaced")
+            else:
+                r = check(e["path"], kind)
+                e.update(status="in_use" if r["ok"] else "invalid", reason=r["reason"], date=r["date"])
+            entries.append(e)
+    groups = {}
+    for e in entries:
+        if e["status"] == "in_use":
+            groups.setdefault(e["name"], []).append(e)
+    for copies in groups.values():
+        winner = _winner(copies)
+        for e in copies:
+            if e is not winner:
+                e["status"] = "duplicate"
+    return entries
+
+
+# --- checks ---------------------------------------------------------------------------
+
+
+def kiwix_book(path):
+    """Kiwix's own reading of a ZIM (its <book> attributes), or None when it can't read it."""
+    with tempfile.TemporaryDirectory() as d:
+        lib = Path(d) / "library.xml"
+        r = subprocess.run(["kiwix-manage", str(lib), "add", str(path)], capture_output=True)
+        if r.returncode != 0:
+            return None
+        book = ET.parse(lib).getroot().find("book")
+        return dict(book.attrib) if book is not None else None
+
+
+def real_check(scheme):
+    """check(path, kind) with the upload checks: Kiwix for books, pmtiles.check for maps."""
+    import pmtiles  # noqa: PLC0415 — only the real run needs it
+    from content import Refused  # noqa: PLC0415
+
+    def check(path, kind):
+        if kind == "wiki":
+            book = kiwix_book(path)
+            if book is None:
+                return {"ok": False, "reason": "not a readable wiki book", "date": None}
+            return {"ok": True, "reason": None, "date": book.get("date") or None}
+        try:
+            pmtiles.check(path, scheme)
+        except Refused as e:
+            return {"ok": False, "reason": str(e), "date": None}
+        mtime = time.gmtime(path.stat().st_mtime)  # PMTiles has no standard date
+        return {"ok": True, "reason": None, "date": time.strftime("%Y-%m-%dT%H:%M:%S", mtime)}
+
+    return check
+
+
+class CheckCache:
+    """Wraps check(): remembers results by (real path, size, mtime), saved as JSON.
+
+    Checking a big book means Kiwix opening it; at boot only new or changed files are.
+    """
+
+    def __init__(self, path, check):
+        self.path = Path(path)
+        self.check = check
+        try:
+            self.old = json.loads(self.path.read_text())
+        except (OSError, ValueError):
+            self.old = {}
+        self.new = {}  # only what was looked at this run is kept
+
+    def __call__(self, path, kind):
+        st = path.stat()
+        key = f"{os.path.realpath(path)}|{st.st_size}|{st.st_mtime_ns}"
+        result = self.old.get(key) or self.check(path, kind)
+        self.new[key] = result
+        return result
+
+    def save(self):
+        tmp = self.path.with_name(f".{self.path.name}.tmp")
+        tmp.write_text(json.dumps(self.new))
+        os.replace(tmp, self.path)
+
+
+# --- the index ------------------------------------------------------------------------
+
+
+def _readable(path, bits):
+    """Add read (and for folders, enter) rights for everyone; exFAT/NTFS refuse — fine, their
+    mount options already make everything readable."""
+    try:
+        mode = path.stat().st_mode
+        if mode & bits != bits:
+            path.chmod(mode | bits)
+    except OSError:
+        pass
+
+
+def build_index(entries_by_kind, library):
+    """Swap `library` (a symlink) to a fresh folder of links to the in-use copies."""
+    library = Path(library)
+    parent = library.parent
+    new = parent / f".library-{time.time_ns()}"
+    for kind, entries in entries_by_kind.items():
+        (new / kind).mkdir(parents=True)
+        for e in entries:
+            if e["status"] == "in_use":
+                _readable(e["path"].parent, 0o555)  # kiwix-serve and nginx run unprivileged
+                _readable(e["path"], 0o444)
+                os.symlink(e["path"], new / kind / e["name"])
+    new.chmod(0o755)
+    if library.is_dir() and not library.is_symlink():
+        shutil.rmtree(library)  # a plain folder from before: replaced once
+    link = parent / f".library-link-{time.time_ns()}"
+    os.symlink(new.name, link)
+    os.replace(link, library)  # atomic: readers see the old index or the new one
+    for old in parent.glob(".library-*"):
+        if old != new and old.is_dir() and not old.is_symlink():
+            shutil.rmtree(old)
+
+
+# --- auto-resolve ---------------------------------------------------------------------
+
+
+def set_aside(loc, entries, today, root):
+    """Move loc's invalid and duplicate files to root/<today>/<kind>/ — never delete.
+
+    root is on the same filesystem as the location (a rename, no copy). A name already
+    there gets -1, -2, … Returns the file names moved.
+    """
+    moved = []
+    for e in entries:
+        if e["location"] != loc.id or e["status"] not in ("invalid", "duplicate"):
+            continue
+        day = Path(root) / today / e["kind"]
+        day.mkdir(parents=True, exist_ok=True)
+        stem, dot, ext = e["file"].rpartition(".")
+        dest, n = day / e["file"], 0
+        while dest.exists():
+            n += 1
+            dest = day / f"{stem}-{n}{dot}{ext}"
+        os.rename(e["path"], dest)
+        moved.append(e["file"])
+    return moved
+
+
+# --- the locations right now ----------------------------------------------------------
+
+
+def _json(path, default):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return default
+
+
+def current_locations(data_dir, drives_dir, registry_file, drive_state_file):
+    """This device, then every added drive that is mounted now, in the order they were added."""
+    locs = [Location(id="device", name=DEVICE_NAME, root=Path(data_dir), order=0)]
+    state = _json(drive_state_file, {})
+    for n, d in enumerate(_json(registry_file, []), start=1):
+        if state.get(d["uuid"], {}).get("mounted"):
+            locs.append(Location(id=d["uuid"], name=d["name"], root=Path(drives_dir) / d["uuid"] / "survival-kit", order=n))
+    return locs
+
+
+def _state_entry(e):
+    keep = ("name", "file", "size", "mtime", "location", "status", "reason", "date")
+    return {k: e[k] for k in keep} | {"path": str(e["path"])}
+
+
+def main():
+    env = os.environ
+    ensure_tree(env["DATA_DIR"], DEVICE_NAME)
+    locs = current_locations(env["DATA_DIR"], env["DRIVES_DIR"], env["REGISTRY"], env["DRIVE_STATE"])
+    check = CheckCache(env["CACHE_FILE"], real_check(int(env.get("MAP_SCHEME", "4"))))
+    protected = set(env.get("PROTECTED", "").split())
+    entries = {kind: resolve(locs, kind, check, protected) for kind in ("wiki", "maps")}
+    build_index(entries, env["LIBRARY_DIR"])
+    check.save()
+    state = Path(env["STATE_FILE"])
+    tmp = state.with_name(f".{state.name}.tmp")
+    tmp.write_text(json.dumps({k: [_state_entry(e) for e in v] for k, v in entries.items()}))
+    tmp.chmod(0o644)
+    os.replace(tmp, state)
+    for kind, v in entries.items():
+        bad = [e for e in v if e["status"] != "in_use"]
+        print(f"library: {kind}: {len(v) - len(bad)} in use, {len(bad)} not in use", flush=True)
+    # reload the wiki's catalog; no-op at boot (kiwix-library runs after this unit)
+    subprocess.run(["systemctl", "--no-block", "try-restart", "kiwix-library.service"], check=False)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
