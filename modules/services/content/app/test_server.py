@@ -368,6 +368,37 @@ class Api(unittest.TestCase):
         self.assertTrue(self.json("POST", "/api/drives/u-1/reconnect")[1]["mounted"])
         self.assertEqual([i["name"] for i in self.json("GET", "/api/status")[1]["wiki"]], ["far.zim"])
 
+    def test_render_lists_drives_and_statuses(self):
+        tree = self.add_drive("u-1")
+        self.offer("u-fat", fstype="vfat", label="STICK", refusal="FAT32 can't hold files over 4 GB")
+        (self.zims / "book.zim").write_bytes(b"a")
+        (tree / "wiki" / "book.zim").write_bytes(b"b")
+        (tree / "wiki" / "survival-kit.zim").write_bytes(b"c")
+        self.box.rebuild()
+        page = self.call("GET", "/")[1].decode()
+        self.assertIn('id="drives"', page)
+        self.assertIn("BIG", page)  # the added drive, by name
+        self.assertIn('data-drive="u-1" data-action="forget"', page)
+        self.assertIn("STICK", page)
+        self.assertIn("FAT32 can&#x27;t hold files over 4 GB", page)  # refused: no Add button
+        self.assertNotIn('data-action="add" data-drive="u-fat"', page)
+        self.assertIn("duplicate — not in use", page)
+        self.assertIn("invalid — the box&#x27;s own manual can&#x27;t be replaced", page)
+        self.assertIn('data-resolve="u-1"', page)  # auto-resolve offered where needed
+        self.assertNotIn('data-resolve="device"', page)
+        self.assertIn('<select id="save-to"', page)
+        self.assertIn('<option value="device" selected>', page)  # most free space
+        self.assertIn('<option value="u-1">', page)
+
+    def test_render_drive_missing_offers_reconnect(self):
+        self.add_drive("u-1")
+        self.plugged.discard("u-1")
+        self.json("POST", "/api/drives/u-1/reconnect")
+        page = self.call("GET", "/")[1].decode()
+        self.assertIn("not connected", page)
+        self.assertIn('data-drive="u-1" data-action="reconnect"', page)
+        self.assertNotIn('<option value="u-1">', page)  # can't save to a missing drive
+
     def test_forget_drive_keeps_files(self):
         tree = self.add_drive("u-1")
         (tree / "wiki" / "far.zim").write_bytes(b"far")

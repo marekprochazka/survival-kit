@@ -74,54 +74,125 @@ def _size(n):
     return f"{n / 1000**3:.1f} GB" if n >= 10**9 else f"{n / 1000**2:.0f} MB"
 
 
+NOT_IN_USE = {"duplicate": "duplicate — not in use", "invalid": "invalid"}
+
+
+def _status(item):
+    if item["status"] == "invalid":
+        return f'invalid — {item["reason"]}'
+    return NOT_IN_USE.get(item["status"], "")
+
+
+def _drives(s, e):
+    """The Drives section: where content lives, added drives, drives that could be added."""
+    locs = {loc["id"]: loc for loc in s["locations"]}
+    items = s["wiki"] + (s["maps"] or [])
+    trouble = {}
+    for i in items:
+        if i["status"] != "in_use":
+            trouble[i["location"]] = trouble.get(i["location"], 0) + 1
+
+    def resolve(id):
+        n = trouble.get(id)
+        return f'<button data-resolve="{e(id)}" data-count="{n}">Auto-resolve ({n})</button>' if n else ""
+
+    out = [
+        '<section id="drives"><h2>Drives</h2>',
+        "<p>Books and maps can live on this device and on drives that stay plugged in. "
+        "Files the box can't use, and older copies of a book or map it has elsewhere, are marked "
+        "&ldquo;not in use&rdquo;; <em>Auto-resolve</em> moves them out of the way (nothing is deleted).</p>",
+        "<table><tr><th>Where</th><th>Space</th><th>State</th><th></th></tr>",
+    ]
+    dev = locs["device"]
+    out.append(
+        f'<tr><td>This device</td><td>{_size(dev["free"])} free of {_size(dev["total"])}</td>'
+        f'<td>ready</td><td>{resolve("device")}</td></tr>'
+    )
+    for d in s["drives"]["added"]:
+        loc = locs.get(d["uuid"])
+        space = f'{_size(loc["free"])} free of {_size(loc["total"])}' if loc else ""
+        state = "ready" if loc else e(d["error"] or "not connected")
+        buttons = [] if loc else [f'<button data-drive="{e(d["uuid"])}" data-action="reconnect">Reconnect</button>']
+        buttons.append(resolve(d["uuid"]))
+        buttons.append(f'<button data-drive="{e(d["uuid"])}" data-action="forget" data-name="{e(d["name"])}">Forget</button>')
+        out.append(f'<tr><td>{e(d["name"])}</td><td>{space}</td><td>{state}</td><td>{" ".join(b for b in buttons if b)}</td></tr>')
+    out.append("</table>")
+    if s["drives"]["available"]:
+        out.append("<h3>Drives you can add</h3>")
+        out.append("<table><tr><th>Drive</th><th>Size</th><th>Type</th><th></th></tr>")
+        for c in s["drives"]["available"]:
+            name = c["label"] or c["model"] or c["path"]
+            note = " (open on the desktop — it will be taken over)" if c["desktop"] else ""
+            action = (
+                f'<span class="error">{e(c["refusal"])}</span>'
+                if c["refusal"]
+                else f'<button data-action="add" data-drive="{e(c["uuid"])}" data-name="{e(name)}">Add</button>'
+            )
+            out.append(
+                f'<tr><td>{e(name)}{e(note)}</td><td>{_size(c["size"] or 0)}</td><td>{e(c["fstype"])}</td><td>{action}</td></tr>'
+            )
+        out.append("</table>")
+    out.append(
+        "<p>Adding never formats a drive: the box keeps its files in a <code>survival-kit</code> folder "
+        "on it and leaves everything else alone. <em>Forget</em> stops using a drive; its files stay on it.</p>"
+    )
+    # where new imports go: the drive with the most free space first
+    ready = sorted(s["locations"], key=lambda loc: -loc["free"])
+    opts = [
+        f'<option value="{e(loc["id"])}"{" selected" if n == 0 else ""}>{e(loc["name"])} ({_size(loc["free"])} free)</option>'
+        for n, loc in enumerate(ready)
+    ]
+    out.append(f'<p><label>Save new books and maps to <select id="save-to">{"".join(opts)}</select></label></p></section>')
+    return out
+
+
+def _items(s, kind, items, builtins, cut, e):
+    names = {loc["id"]: loc["name"] for loc in s["locations"]}
+    out = ["<table><tr><th>Name</th><th>Where</th><th>Size</th><th>Imported</th><th></th></tr>"]
+    for i in items:
+        day = time.strftime("%Y-%m-%d", time.localtime(i["mtime"]))
+        state = _status(i)
+        cls = ' class="unused"' if state else ""
+        note = f'<br><small>{e(state)}</small>' if state else ""
+        out.append(
+            f'<tr{cls}><td>{e(i["name"][:-cut])}{note}</td><td>{e(names.get(i["location"], i["location"]))}</td>'
+            f'<td>{_size(i["size"])}</td><td>{day}</td>'
+            f'<td><button data-delete="{kind}" data-name="{e(i["name"])}" data-at="{e(i["location"])}" '
+            f'data-file="{e(i["file"])}">Delete</button></td></tr>'
+        )
+    for b in builtins:
+        note = "replaced by import" if b["replaced"] else "built in"
+        out.append(
+            f'<tr class="builtin"><td>{e(b["name"][:-cut])}</td><td>built in</td><td>{_size(b["size"])}</td>'
+            f"<td>{note}</td><td></td></tr>"
+        )
+    out.append("</table>")
+    return out
+
+
 def render(template, s):
     """The page's lists as HTML, so viewing works without JavaScript."""
     e = html.escape
-    d = s["disk"]
-    rest = d["total"] - d["free"] - d["wiki"] - d["maps"] - d["models"]
-    out = [
-        '<section id="disk"><h2>Disk</h2>',
-        f'<p>{_size(d["free"])} free of {_size(d["total"])}. '
-        f'Wiki {_size(d["wiki"])}, maps {_size(d["maps"])}, AI models {_size(d["models"])}, '
-        f"system and other {_size(max(rest, 0))}.</p>",
-        "</section>",
-        '<section id="wiki"><h2>Wiki books</h2>',
-        "<table><tr><th>Book</th><th>Size</th><th>Imported</th><th></th></tr>",
-    ]
-    for b in s["wiki"]:
-        day = time.strftime("%Y-%m-%d", time.localtime(b["mtime"]))
-        out.append(
-            f'<tr><td>{e(b["name"][:-4])}</td><td>{_size(b["size"])}</td><td>{day}</td>'
-            f'<td><button data-delete="wiki" data-name="{e(b["name"])}" data-at="{e(b["location"])}" '
-            f'data-file="{e(b["file"])}">Delete</button></td></tr>'
-        )
-    for b in s["builtins"]:
-        note = "replaced by import" if b["replaced"] else "built in"
-        out.append(f'<tr class="builtin"><td>{e(b["name"][:-4])}</td><td>{_size(b["size"])}</td><td>{note}</td><td></td></tr>')
-    out.append("</table>")
+    out = _drives(s, e)
+    out.append('<section id="wiki"><h2>Wiki books</h2>')
+    out += _items(s, "wiki", s["wiki"], s["builtins"], 4, e)
     out.append(
         '<p><label>Import wiki files <input type="file" data-import="wiki" accept=".zim" multiple></label> '
         '<label>or a folder <input type="file" data-import="wiki" webkitdirectory></label></p></section>'
     )
     if s["maps"] is not None:
         out.append('<section id="maps"><h2>Maps</h2>')
-        out.append("<table><tr><th>Map</th><th>Size</th><th>Imported</th><th></th></tr>")
-        for m in s["maps"]:
-            day = time.strftime("%Y-%m-%d", time.localtime(m["mtime"]))
-            out.append(
-                f'<tr><td>{e(m["name"][:-8])}</td><td>{_size(m["size"])}</td><td>{day}</td>'
-                f'<td><button data-delete="maps" data-name="{e(m["name"])}" data-at="{e(m["location"])}" '
-                f'data-file="{e(m["file"])}">Delete</button></td></tr>'
-            )
-        for m in s["map_builtins"]:
-            note = "replaced by import" if m["replaced"] else "built in"
-            out.append(f'<tr class="builtin"><td>{e(m["name"][:-8])}</td><td>{_size(m["size"])}</td><td>{note}</td><td></td></tr>')
-        out.append("</table>")
+        out += _items(s, "maps", s["maps"], s["map_builtins"], 8, e)
         out.append(
             '<p><label>Import map files <input type="file" data-import="map" accept=".pmtiles" multiple></label></p></section>'
         )
     if s["models"] is not None:
+        d = s["disk"]
         out.append('<section id="models"><h2>AI models</h2>')
+        out.append(
+            f'<p class="note">AI models are stored on this device ({_size(d["free"])} free) — '
+            "put big books and maps on added drives.</p>"
+        )
         if s["models_error"]:
             out.append(f'<p class="error">AI models: {e(s["models_error"])} (is Ollama still starting?)</p>')
         out.append("<table><tr><th>Model</th><th>Size</th><th></th></tr>")

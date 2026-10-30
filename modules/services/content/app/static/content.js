@@ -1,8 +1,10 @@
-// Content manager page: imports (one upload per file, with progress) and deletes.
-// The lists themselves are rendered by the server, so viewing works without this script.
+// Content manager page: imports (one upload per file, with progress), deletes, drives and
+// auto-resolve. The lists themselves are rendered by the server, so viewing works without
+// this script.
 "use strict";
 
 const log = document.getElementById("log");
+const saveTo = document.getElementById("save-to");
 
 function say(text, isError) {
   const p = document.createElement("p");
@@ -23,13 +25,19 @@ async function api(method, url) {
 // "book.zim" → "book", "czechia.pmtiles" → "czechia"
 const title = (name) => name.replace(/\.(zim|pmtiles)$/, "");
 
+// the chosen place for books and maps (models always go to this device)
+const where = () => saveTo.options[saveTo.selectedIndex].textContent.replace(/ \(.*\)$/, "");
+
 // one file: ask the box first (name, clash, space), confirm a replacement, then upload
 async function importOne(kind, file, model) {
   const q = new URLSearchParams({ kind, file: file.name, size: file.size });
   if (model) q.set("model", model);
+  if (kind !== "model") q.set("to", saveTo.value);
   const check = await api("GET", "/api/check?" + q);
   const noun = kind === "map" ? "map" : "book";
-  if (check.exists === "import" && !confirm(`"${title(check.name)}" is already on this box. Replace it?`)) {
+  if (check.exists === "import" && !confirm(
+    `"${title(check.name)}" is already on this box. Replace it with this file` +
+    (kind === "model" ? "?" : ` (saved to ${where()})?`))) {
     return say(`${file.name}: skipped`);
   }
   if (check.exists === "builtin" && !confirm(
@@ -62,7 +70,8 @@ async function importOne(kind, file, model) {
     throw e;
   }
   bar.remove();
-  line.textContent = `${file.name}: ${result.result} as "${title(result.name)}"`;
+  line.textContent = `${file.name}: ${result.result} as "${title(result.name)}"` +
+    (kind === "model" ? "" : ` on ${where()}`);
   if (result.note) say(`${file.name}: note — ${result.note}`);
 }
 
@@ -91,19 +100,63 @@ async function importFiles(input) {
   say("Done. Reload the page to see the updated lists.");
 }
 
+// a button's action: confirm first where it matters, then reload the page
+function onClick(selector, action) {
+  document.querySelectorAll(selector).forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        if (await action(button.dataset) !== false) location.reload();
+      } catch (e) {
+        say(e.message, true);
+      }
+      button.disabled = false;
+    });
+  });
+}
+
 document.querySelectorAll("input[data-import]").forEach((input) => {
   input.addEventListener("change", () => importFiles(input));
 });
 
-document.querySelectorAll("button[data-delete]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    const { delete: kind, name } = button.dataset;
-    if (!confirm(`Delete "${title(name)}" from this box?`)) return;
-    try {
-      await api("DELETE", `/api/${kind}/${encodeURIComponent(name)}`);
-      location.reload();
-    } catch (e) {
-      say(`${title(name)}: ${e.message}`, true);
-    }
-  });
+onClick("button[data-delete]", async ({ delete: kind, name, at, file }) => {
+  if (!confirm(`Delete "${title(name)}"` + (at ? "" : " from this box") + "?")) return false;
+  const q = new URLSearchParams();
+  if (at) q.set("at", at);
+  if (file) q.set("file", file);
+  await api("DELETE", `/api/${kind}/${encodeURIComponent(name)}?` + q);
+});
+
+onClick("button[data-action=add]", async ({ drive, name }) => {
+  const chosen = prompt("Name for this drive:", name);
+  if (chosen === null) return false;
+  say(`${chosen}: adding…`);
+  const r = await api("POST", "/api/drives/add?" + new URLSearchParams({ uuid: drive, name: chosen }));
+  if (!r.mounted) {
+    say(`${r.name}: added, but it can't be used: ${r.error}`, true);
+    return false;
+  }
+});
+
+onClick("button[data-action=reconnect]", async ({ drive }) => {
+  const r = await api("POST", `/api/drives/${encodeURIComponent(drive)}/reconnect`);
+  if (!r.mounted) {
+    say(`still not available: ${r.error}`, true);
+    return false;
+  }
+});
+
+onClick("button[data-action=forget]", async ({ drive, name }) => {
+  if (!confirm(`Stop using "${name}"?\nIts books and maps disappear from the box; the files stay on the drive.`)) {
+    return false;
+  }
+  await api("POST", `/api/drives/${encodeURIComponent(drive)}/forget`);
+});
+
+onClick("button[data-resolve]", async ({ resolve: at, count }) => {
+  if (!confirm(`Move ${count} file(s) that are not in use into a "set-aside" folder?\nNothing is deleted.`)) {
+    return false;
+  }
+  const r = await api("POST", "/api/resolve?" + new URLSearchParams({ at }));
+  say(`moved aside: ${r.moved.join(", ")}`);
 });
