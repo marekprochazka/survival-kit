@@ -8,19 +8,18 @@
 - `services.kiwix-serve` (from nixpkgs) on `127.0.0.1:8080`, reading the catalog
   `/var/lib/survival-kit/kiwix/library.xml`, with `--monitorLibrary`.
 - **`kiwix-library.service`** rebuilds that catalog **from scratch** at every boot (and when
-  restarted): it adds every bundled book and every `*.zim` in
-  `/var/lib/survival-kit/kiwix/zims/` (the drop-in folder) using `kiwix-manage`.
-  - Each file is added on its own; an unreadable or corrupt file is skipped with
-    "kiwix-library: skipping unreadable …" in its log — one bad file never takes the wiki
-    down.
-  - Drop-ins are made world-readable (kiwix-serve runs as an unprivileged dynamic user).
-  - Files in `zims/` that don't end in `.zim` are reported ("kiwix-library: ignoring …")
-    — rename `.ZIM` files, join split `.zimaa`/`.zimab` parts first.
+  restarted): it adds every bundled book and every book in the content library,
+  `/var/lib/survival-kit/library/wiki/` — links to the books in use on this device and on
+  added drives, already checked and made readable (see [Storage](storage.html)). It runs
+  after `survival-kit-library.service`.
+  - Each file is added on its own; one that fails anyway (a drive pulled out since) is
+    skipped with "kiwix-library: skipping unreadable …" in its log — one bad file never
+    takes the wiki down.
   - The new catalog is written to a temp file and renamed into place (atomic); the temp
     file is removed if anything fails.
   - After a successful rebuild it restarts kiwix-serve (`--monitorLibrary` alone misses a
     second change within the same second).
-  - A built-in book is skipped when `zims/` holds an import with the same file name
+  - A built-in book is skipped when the library holds a book with the same file name
     ("built-in … replaced by import") — see [Content manager](content.html).
   - kiwix-serve only *wants* kiwix-library: if a rebuild fails, the wiki keeps running on
     the last good catalog.
@@ -41,7 +40,7 @@ Bundled ("starter content", option `survivalKit.services.kiwix.starterContent`):
 
 ## Adding content by hand
 
-    sudo cp something.zim /var/lib/survival-kit/kiwix/zims/
-    sudo systemctl restart kiwix-library
+    sudo cp something.zim /var/lib/survival-kit/data/wiki/
+    sudo systemctl restart survival-kit-library
 
-A friendlier "import from USB drive" is planned.
+(it checks the book and reloads Kiwix). Usually: the [Content manager](content.html).

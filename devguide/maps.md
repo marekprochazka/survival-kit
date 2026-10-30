@@ -23,17 +23,17 @@ system, labels `lang: "en"` = English name where present, else the local one), p
 
 | File | What |
 |---|---|
-| `default.nix` | Builds the site (page + vendored files), registry entry (a **static site**: `root`, no port), nginx locations, the imports dir |
+| `default.nix` | Builds the site (page + vendored files), registry entry (a **static site**: `root`, no port), nginx locations |
 | `builtins.nix` | **Generated** by `utils/fetch-maps`: the built-in maps, pinned by hash (`requireFile`) |
 | `site/index.html`, `site/maps.css` | The page |
 | `site/maps.js` | Lists the maps, opens them, builds the style, ruler and grid |
 | `site/geo.js` | Map maths without a browser: tile bounds, which map draws a tile, distances, grid lines |
 
 Served at `maps.deck`: `/` the site (store path); `/builtin/` the built-in maps (store);
-`/imported/` `/var/lib/survival-kit/maps` (written by the content manager). Both map folders
+`/imported/` `/var/lib/survival-kit/library/maps/` (links to the maps in use on this device
+and on added drives, see [Storage](storage.html); nginx follows them). Both map folders
 are listed as JSON (`autoindex_format json`), which is how the page finds the maps — nothing
-to regenerate after an import. Paths with a `/.` (uploads in progress in `.incoming/`) answer
-404. Maps are sent with `Cache-Control: no-cache`: an import can replace a map of the same
+to regenerate after an import. Paths with a `/.` answer 404. Maps are sent with `Cache-Control: no-cache`: an import can replace a map of the same
 name.
 
 ## Several maps at once

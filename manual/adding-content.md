@@ -8,9 +8,10 @@ The easy way: the **Content** tile — see [Content](content.html).
 
 By hand, in a terminal:
 
-1. Copy the file into `/var/lib/survival-kit/kiwix/zims/`
-   (`sudo cp wikipedia.zim /var/lib/survival-kit/kiwix/zims/`).
-2. Refresh the catalog: `sudo systemctl restart kiwix-library` (or reboot).
+1. Copy the file into `/var/lib/survival-kit/data/wiki/`
+   (`sudo cp wikipedia.zim /var/lib/survival-kit/data/wiki/`) — or into the
+   `survival-kit/wiki/` folder of an added drive.
+2. Refresh: `sudo systemctl restart survival-kit-library` (or reboot).
 
 To remove one, delete the file and refresh the same way.
 

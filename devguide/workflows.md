@@ -19,7 +19,7 @@ New files must be `git add`-ed before the rebuild sees them. Each rebuild is a n
 | Rolling back to an older generation | Rebuilding a **changed** configuration (new things must be built; build tools aren't on the box) |
 | Rebuilding the **unchanged** configuration | Adding packages that aren't already in the store |
 | Evaluating the config (`nix eval`, `nixos-option`) | Updating nixpkgs (`nix flake update`) |
-| Adding wiki content (`.zim` drop-ins) | Building an ISO |
+| Adding wiki content (`.zim` into `data/wiki/`) | Building an ISO |
 
 An "offline build kit" (build tools on the box) is planned.
 
