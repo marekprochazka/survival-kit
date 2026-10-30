@@ -1,7 +1,8 @@
 # Offline maps (ADR-0002, amended) at https://maps.<domain>: no map server — nginx serves a
 # static page (MapLibre + Protomaps style, fonts, icons) and the .pmtiles files; the browser
 # fetches only the byte ranges it needs and draws the map. Built-in maps come from the Nix
-# store (/builtin/), imported ones from the content manager's dir (/imported/).
+# store (/builtin/), imported ones from the content library (/imported/: links to the maps in
+# use on this device and on added drives, ADR-0006).
 {
   config,
   lib,
@@ -10,7 +11,7 @@
 }:
 let
   cfg = config.survivalKit.services.maps;
-  importDir = "/var/lib/survival-kit/maps";
+  importDir = "${config.survivalKit.storage.libraryDir}/maps";
   # vendored, pinned by hash; licences ship next to them (THIRD-PARTY.md)
   maplibre = pkgs.fetchurl {
     url = "https://registry.npmjs.org/maplibre-gl/-/maplibre-gl-6.14.0.tgz";
@@ -105,14 +106,10 @@ in
         alias = "${importDir}/";
         extraConfig = listing;
       };
-      # never serve dot-paths (uploads in progress live in /imported/.incoming/);
-      # a regex location wins over the prefix ones above
+      # never serve dot-paths; a regex location wins over the prefix ones above
       "~ /\\." = {
         return = "404";
       };
     };
-
-    # the content manager (root) writes here; nginx only reads
-    systemd.tmpfiles.rules = [ "d ${importDir} 0755 root root -" ];
   };
 }

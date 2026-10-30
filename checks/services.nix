@@ -56,7 +56,8 @@ pkgs.testers.runNixOSTest {
     import json
 
     STARTER_BOOKS = 7  # bundled ZIMs; raised as starter content lands
-    ZIMS = "/var/lib/survival-kit/kiwix/zims"
+    ZIMS = "/var/lib/survival-kit/data/wiki"  # this device's books (ADR-0006)
+    REBUILD = "systemctl restart survival-kit-library.service"  # → also the wiki's catalog
     CATALOG = "${curl} -sf 'https://wiki.deck/catalog/v2/entries?count=-1' | grep -c '<entry>' || true"
 
     def books():
@@ -109,34 +110,43 @@ pkgs.testers.runNixOSTest {
     with subtest("health endpoint is up"):
         machine.succeed("${curl} -sf -o /dev/null https://deck/health/kiwix")
 
-    with subtest("drop-in ZIM appears after catalog rebuild"):
+    with subtest("the library is a symlink to a folder of links"):
+        machine.wait_for_unit("survival-kit-library.service")
+        machine.succeed("test -L /var/lib/survival-kit/library && test -d /var/lib/survival-kit/library/wiki")
+        machine.succeed("test -f /var/lib/survival-kit/data/survival-kit.json")
+
+    with subtest("drop-in ZIM appears after a library rebuild"):
         machine.succeed("cp ${dropinZim} " + ZIMS + "/dropin-test.zim")
-        machine.succeed("systemctl restart kiwix-library.service")
+        machine.succeed(REBUILD)
         wait_books(STARTER_BOOKS + 1)
         machine.wait_until_succeeds("${curl} -sfL https://wiki.deck/content/dropin-test | grep -q 'dropin-test test page'")
 
-    with subtest("a corrupt ZIM is skipped, the rest keeps serving"):
+    with subtest("a corrupt ZIM is marked invalid, the rest keeps serving"):
         machine.succeed("echo garbage > " + ZIMS + "/broken.zim")
-        machine.succeed("systemctl restart kiwix-library.service")
+        machine.succeed(REBUILD)
         machine.wait_for_unit("kiwix-serve.service")
         wait_books(STARTER_BOOKS + 1)
+        state = json.loads(machine.succeed("cat /var/lib/survival-kit/library.json"))
+        broken = [e for e in state["wiki"] if e["name"] == "broken.zim"]
+        assert broken and broken[0]["status"] == "invalid", broken
 
-    with subtest("a dangling symlink in zims/ does not take the wiki down"):
+    with subtest("a dangling symlink in the tree does not take the wiki down"):
         machine.succeed("ln -s /nonexistent/gone.zim " + ZIMS + "/gone.zim")
-        machine.succeed("systemctl restart kiwix-library.service")
+        machine.succeed(REBUILD)
         machine.wait_for_unit("kiwix-serve.service")
         wait_books(STARTER_BOOKS + 1)
-        machine.succeed("rm " + ZIMS + "/gone.zim")
+        machine.succeed("rm " + ZIMS + "/gone.zim " + ZIMS + "/broken.zim")
 
-    with subtest("files that are not .zim are reported, not silently ignored"):
+    with subtest("files that are not .zim are ignored"):
         machine.succeed("echo hello > " + ZIMS + "/notes.txt")
-        machine.succeed("systemctl restart kiwix-library.service")
-        machine.wait_until_succeeds("journalctl -b -u kiwix-library | grep -q 'ignoring.*notes.txt'", timeout=60)
+        machine.succeed(REBUILD)
+        machine.succeed("test ! -e /var/lib/survival-kit/library/wiki/notes.txt")
+        wait_books(STARTER_BOOKS + 1)
         machine.succeed("rm " + ZIMS + "/notes.txt")
 
     with subtest("a root-only (0600) drop-in is still served"):
         machine.succeed("install -m 0600 ${privateZim} " + ZIMS + "/private-test.zim")
-        machine.succeed("systemctl restart kiwix-library.service")
+        machine.succeed(REBUILD)
         wait_books(STARTER_BOOKS + 2)
         machine.wait_until_succeeds("${curl} -sfL https://wiki.deck/content/private-test | grep -q 'private-test test page'")
 
@@ -209,7 +219,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("Maps: page, listings, byte ranges, import"):
         MAPS = "${curl} -sf https://maps.deck"
-        MAPDIR = "/var/lib/survival-kit/maps"
+        MAPDIR = "/var/lib/survival-kit/data/maps"
 
         def listed(folder):
             return sorted(e["name"] for e in json.loads(machine.succeed(MAPS + "/" + folder + "/")))
@@ -231,11 +241,14 @@ pkgs.testers.runNixOSTest {
         assert r.get("result") == "added", r
         assert listed("imported") == ["austria.pmtiles"], listed("imported")
 
+        # served through the library's link, byte ranges included
+        assert http_code("-r 0-126 https://maps.deck/imported/austria.pmtiles") == "206", "byte ranges via link"
         # a half-finished upload is never served nor listed
-        machine.succeed("mkdir -p " + MAPDIR + "/.incoming && echo x > " + MAPDIR + "/.incoming/partial")
-        assert http_code("https://maps.deck/imported/.incoming/partial") == "404"
+        machine.succeed("mkdir -p " + MAPDIR + "/.incoming && echo x > " + MAPDIR + "/.incoming/partial.pmtiles")
+        machine.succeed(REBUILD)
+        assert http_code("https://maps.deck/imported/.incoming/partial.pmtiles") == "404"
         assert listed("imported") == ["austria.pmtiles"], listed("imported")
-        machine.succeed("rm " + MAPDIR + "/.incoming/partial")
+        machine.succeed("rm " + MAPDIR + "/.incoming/partial.pmtiles")
 
         r = upload_map("junk.pmtiles", "/etc/hostname")
         assert "not a PMTiles map" in r.get("error", ""), r

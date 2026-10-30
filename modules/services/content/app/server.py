@@ -274,8 +274,14 @@ def wiki_check(path):
         raise Refused("not a readable wiki book")
 
 
-def kiwix_refresh():
+def library_refresh():
+    """Rebuild the library (which copies are in use), then the wiki's catalog from it."""
+    subprocess.run(["systemctl", "restart", "survival-kit-library.service"], check=True)
     subprocess.run(["systemctl", "restart", "kiwix-library.service"], check=True)
+
+
+def kiwix_refresh():
+    library_refresh()
     # the wiki lookup (chat) caches the book list: tell it (best effort, it may be off)
     url = os.environ.get("LOOKUP_URL")
     if url:
@@ -365,7 +371,7 @@ def main():
             builtins=sizes("MAP_BUILTINS_DIR", ".pmtiles"),
             protected=set(),
             validate=lambda path: pmtiles.check(path, scheme),
-            refresh=lambda: None,  # nginx serves the folder as it is; the page reloads it
+            refresh=library_refresh,  # nginx serves the library's links; the page reloads it
             noun="map",
         )
     models = content.Models(Ollama(config.model_incoming)) if env.get("OLLAMA") == "1" else None

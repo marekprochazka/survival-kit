@@ -3,6 +3,7 @@
 {
   imports = [
     ./web.nix
+    ./storage.nix
     ./kiwix
     ./vaultwarden
     ./ollama

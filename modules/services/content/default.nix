@@ -11,11 +11,12 @@ let
   cfg = config.survivalKit.services.content;
   kiwix = config.survivalKit.services.kiwix;
   port = 8300;
-  zims = "/var/lib/survival-kit/kiwix/zims";
+  # this device's content tree (ADR-0006); the library links what is in use for the services
+  zims = "${config.survivalKit.storage.dataDir}/wiki";
   stateDir = "/var/lib/survival-kit/content";
   ollama = config.services.ollama.enable;
   maps = config.survivalKit.services.maps;
-  mapsDir = "/var/lib/survival-kit/maps"; # created by the maps module, served by nginx
+  mapsDir = "${config.survivalKit.storage.dataDir}/maps";
   # the page + the dashboard's look
   static = pkgs.runCommand "content-static" { } ''
     mkdir $out
@@ -31,9 +32,9 @@ in
     systemd.services.survival-kit-content = {
       description = "survival-kit content manager";
       wantedBy = [ "multi-user.target" ];
-      # kiwix-library creates the drop-in dir; models need the local Ollama
-      after = [ "kiwix-library.service" ] ++ lib.optional ollama "ollama.service";
-      wants = [ "kiwix-library.service" ] ++ lib.optional ollama "ollama.service";
+      # the library creates this device's tree; models need the local Ollama
+      after = [ "survival-kit-library.service" ] ++ lib.optional ollama "ollama.service";
+      wants = [ "survival-kit-library.service" ] ++ lib.optional ollama "ollama.service";
       path = [
         pkgs.kiwix-tools # kiwix-manage: is an uploaded book readable?
         config.systemd.package # systemctl restart kiwix-library
@@ -45,11 +46,11 @@ in
         STATE_DIR = stateDir;
         STATIC_DIR = "${static}";
         BUILTINS_DIR = lib.optionalString (kiwix.starterDir != null) "${kiwix.starterDir}";
-        PROTECTED = "survival-kit survival-kit-dev"; # the box's own manuals
+        PROTECTED = config.systemd.services.survival-kit-library.environment.PROTECTED;
         OLLAMA = if ollama then "1" else "0";
         MODELS_DIR = config.services.ollama.models;
         LOOKUP_URL = lib.optionalString config.survivalKit.services.lookup.enable "http://127.0.0.1:8310";
-        # maps: imports land where nginx serves them; the map page reads both folders
+        # maps: imports land in this device's tree; the library links them for nginx
         MAPS_DIR = lib.optionalString maps.enable mapsDir;
         MAP_BUILTINS_DIR = lib.optionalString maps.enable "${maps.builtinDir}";
         MAP_SCHEME = "4"; # Protomaps basemap version the bundled map style draws
@@ -61,7 +62,7 @@ in
         ExecStart = "${pkgs.python3}/bin/python3 ${./app}/server.py";
         StateDirectory = "survival-kit/content";
         Restart = "on-failure";
-        # root (writes into the wiki's dir, restarts its catalog) — but confined:
+        # root (writes into the content tree, rebuilds the library) — but confined:
         ProtectSystem = "strict";
         ReadWritePaths = [
           zims

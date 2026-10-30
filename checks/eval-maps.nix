@@ -24,14 +24,9 @@ assert lib.assertMsg (
   json "/builtin/" && json "/imported/"
 ) "built-in and imported maps are listed as nginx JSON";
 assert lib.assertMsg (
-  locs."/imported/".alias == "/var/lib/survival-kit/maps/"
-) "imported maps come from the content manager's dir";
-assert lib.assertMsg (
-  locs."~ /\\.".return == "404"
-) "dot-paths (uploads in progress) are never served";
-assert lib.assertMsg
-  (lib.elem "d /var/lib/survival-kit/maps 0755 root root -" cfg.systemd.tmpfiles.rules)
-  "the imported maps dir exists, root-owned, readable by nginx";
+  locs."/imported/".alias == "/var/lib/survival-kit/library/maps/"
+) "imported maps come from the content library (ADR-0006)";
+assert lib.assertMsg (locs."~ /\\.".return == "404") "dot-paths are never served";
 assert lib.assertMsg (
   lib.sort lib.lessThan builtinNames == [
     "central-europe.pmtiles"

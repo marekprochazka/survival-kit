@@ -1,6 +1,7 @@
 # Kiwix — offline wikis/docs (ZIM files) at https://wiki.<domain>.
-# Catalog is runtime state: kiwix-library rebuilds library.xml at every boot
-# from the drop-in dir, so new ZIMs need no rebuild (ADR-0004 fills zims/).
+# Catalog is runtime state: kiwix-library rebuilds library.xml at every boot from the
+# built-in books and the content library's wiki/ (ADR-0006: books on this device and on
+# added drives, checked), so new ZIMs need no rebuild.
 {
   config,
   lib,
@@ -10,6 +11,7 @@
 let
   cfg = config.survivalKit.services.kiwix;
   dataDir = "/var/lib/survival-kit/kiwix";
+  inUse = "${config.survivalKit.storage.libraryDir}/wiki"; # links to the books in use
   port = 8080;
   books = pkgs.callPackage ../../../pkgs/books.nix { };
   starterZims = import ./zims.nix { inherit pkgs; } // {
@@ -67,41 +69,37 @@ in
         "kiwix-serve.service"
       ];
       before = [ "kiwix-serve.service" ];
+      # the content library decides which books are in use (checked, newer copy wins)
+      wants = [ "survival-kit-library.service" ];
+      after = [ "survival-kit-library.service" ];
       path = [ config.services.kiwix-serve.package ];
-      # re-run on demand (after adding ZIMs, later by an import tile): no systemd
-      # start limit — the default (5 starts / 10 s) refuses quick successive refreshes
+      # re-run on demand (after every library rebuild): no systemd start limit — the
+      # default (5 starts / 10 s) refuses quick successive refreshes
       startLimitIntervalSec = 0;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
       };
       script = ''
-        install -d -m 0755 ${dataDir} ${dataDir}/zims
+        install -d -m 0755 ${dataDir}
         tmp=$(mktemp --suffix=.xml ${dataDir}/.library.XXXXXX)
         trap 'rm -f "$tmp"' EXIT # no leftover temp catalogs if anything fails
         printf '<library version="20110515"></library>\n' > "$tmp"
         shopt -s nullglob
-        # say what is ignored instead of skipping it silently
-        for f in ${dataDir}/zims/*; do
-          [[ $f == *.zim ]] ||
-            echo "kiwix-library: ignoring $f: not a .zim file (rename .ZIM; join split .zimaa/.zimab parts first)" >&2
-        done
         ${lib.optionalString cfg.starterContent ''
           for zim in ${starterDir}/*.zim; do
             # an imported book with the same name replaces the built-in (content manager)
-            if [[ -e ${dataDir}/zims/$(basename "$zim") ]]; then
+            if [[ -e ${inUse}/$(basename "$zim") ]]; then
               echo "kiwix-library: built-in $(basename "$zim" .zim) replaced by import"
               continue
             fi
             kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2
           done
         ''}
-        for zim in ${dataDir}/zims/*.zim; do
-          # chmod: kiwix-serve runs as an unprivileged DynamicUser. Guarded like
-          # kiwix-manage — one odd entry (dangling link, read-only media) must not
-          # abort the rebuild (the script runs under `set -e`).
-          { chmod a+r "$zim" && kiwix-manage "$tmp" add "$zim"; } ||
-            echo "kiwix-library: skipping unreadable $zim" >&2
+        for zim in ${inUse}/*.zim; do
+          # the library already checked and made it readable; still guarded — a drive
+          # pulled out since must not abort the rebuild (the script runs under `set -e`)
+          kiwix-manage "$tmp" add "$zim" || echo "kiwix-library: skipping unreadable $zim" >&2
         done
         chmod 0644 "$tmp"
         mv -f "$tmp" ${dataDir}/library.xml # atomic: kiwix-serve never sees a half-written file
