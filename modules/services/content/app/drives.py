@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from content import Refused
@@ -215,8 +216,14 @@ def main():
     def run(args):
         subprocess.run(args, check=True, capture_output=True, text=True)
 
+    recorded = Registry(env["REGISTRY"]).drives()
+    # at boot a USB drive may show up a few seconds late: wait up to 10 s for missing ones
+    for _ in range(10):
+        if all((Path("/dev/disk/by-uuid") / d["uuid"]).exists() for d in recorded):
+            break
+        time.sleep(1)
     state = mount_all(
-        Registry(env["REGISTRY"]).drives(),
+        recorded,
         env["DRIVES_DIR"],
         run,
         lambda: parse_mounts(Path("/proc/self/mounts").read_text()),

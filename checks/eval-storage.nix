@@ -5,6 +5,8 @@ let
   inherit (pkgs) lib;
   cfg = self.nixosConfigurations.survival-kit.config;
   lib' = cfg.systemd.services.survival-kit-library;
+  drives = cfg.systemd.services.survival-kit-drives;
+  fs = cfg.boot.supportedFilesystems;
   kiwixScript = cfg.systemd.services.kiwix-library.script;
   imported = cfg.services.nginx.virtualHosts."maps.deck".locations."/imported/";
 in
@@ -15,6 +17,12 @@ assert lib.assertMsg (
   lib.elem "kiwix-library.service" lib'.before && lib.elem "survival-kit-drives.service" lib'.after
 ) "order: drives mounted → library rebuilt → wiki catalog";
 assert lib.assertMsg (lib'.serviceConfig.ProtectSystem == "strict") "the library runs confined";
+assert lib.assertMsg (
+  lib.elem "survival-kit-library.service" drives.before && !(drives.serviceConfig ? ProtectSystem)
+) "added drives are mounted before the library, system-wide (not in a private mount namespace)";
+assert lib.assertMsg (
+  (fs.exfat or false) && (fs.ntfs or false) && !(fs.zfs or false)
+) "exFAT and NTFS drives can be mounted (no ZFS)";
 assert lib.assertMsg (
   lib.hasInfix "/var/lib/survival-kit/library/wiki" kiwixScript
   && !(lib.hasInfix "kiwix/zims" kiwixScript)
