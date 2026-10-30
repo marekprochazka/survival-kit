@@ -61,7 +61,7 @@ deleted.
 
 **Unplugged?** Its books and maps disappear after a few seconds, and come back by themselves
 when you plug the drive in again (if not, click **Reconnect**). **Forget** stops using a
-drive for good; its files stay on it.
+drive for good; its files stay on it — books, maps and people's own [Files](files.html).
 
 ## Deleting and disk space
 

@@ -13,6 +13,7 @@ Every location has the same tree:
     wiki/               ← *.zim
     maps/               ← *.pmtiles
     models/             ← (unused: AI models stay in Ollama's own store, see below)
+    files/<account>/    ← people's own files (see [Files](files.html))
     .incoming/          ← uploads in progress
 
 | Location | Tree |
@@ -86,7 +87,8 @@ A damaged `drives.json` is reported (content manager page, journal) and never tr
 empty list — nothing gets unmounted because the list can't be read.
 
 Filesystems (`boot.supportedFilesystems`): ext4, btrfs, xfs, f2fs (`noatime`); exFAT and NTFS
-(kernel `ntfs3`) with `uid=0,gid=0,dmask=022,fmask=133` — root writes, everyone reads.
+(kernel `ntfs3`) with `uid=0,gid=0,dmask=022,fmask=133` — root writes, everyone reads; with
+Files on, `gid=filebrowser,dmask=002,fmask=113` — File Browser writes too (people's files).
 FAT32 (4 GB file limit) and encrypted drives (LUKS, BitLocker) are listed with the reason
 and can't be added. Offered at all: filesystems on disks the system doesn't use — a disk
 with anything mounted outside `/run/media/` and `drives/` (the system disk, swap) is never

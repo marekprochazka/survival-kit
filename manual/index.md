@@ -11,6 +11,7 @@ desktop itself logs in automatically.
 - [Maps](maps.html) — offline maps, measuring distances, getting more maps
 - [Content](content.html) — bring in wiki books, maps and AI models from a stick
 - [Passwords](passwords.html) — the offline password manager
+- [Files](files.html) — your own files, and the box's books and maps to download
 - [Chat](chat.html) — ask the local AI; it looks in the wiki first (full profile)
 - [AI models](ai-models.html) — the models behind the chat (full profile)
 - [Adding content](adding-content.html) — more wikis and documents
