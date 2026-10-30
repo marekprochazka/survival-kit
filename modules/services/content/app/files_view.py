@@ -9,11 +9,16 @@ drive change): bring the mounts in line with the accounts and locations now. Sta
 library only.
 """
 
+import json
 import os
+import pwd
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+from drives import parse_mounts, write_json
+from library import current_locations
 
 RESERVED = ("Library", "Built-in", "This device")
 KINDS = ("wiki", "maps")
@@ -68,6 +73,45 @@ def wanted(view, homes, locs, builtins):
                 if not p.name.startswith(".") and os.path.isfile(real):
                     want[str(home / "Library/Built-in" / kind / p.name)] = (real, True)
     return want
+
+
+def homes(view):
+    """The accounts with a space: the folders File Browser made in view/users at sign-up."""
+    users = Path(view) / "users"
+    if not users.is_dir():
+        return []
+    return sorted(p.name for p in users.iterdir() if p.is_dir() and not p.name.startswith("."))
+
+
+def _set(path, mode, owner):
+    """Mode and owner, each only when different: the path unit watches view/users, and a run
+    that changes something there would start itself again. Errors are ignored (exFAT/NTFS have
+    no owners or modes; the mount options give them)."""
+    st = path.stat()
+    if (st.st_uid, st.st_gid) != owner:
+        try:
+            os.chown(path, *owner)
+        except OSError:
+            pass
+    if st.st_mode & 0o7777 != mode:
+        try:
+            path.chmod(mode)
+        except OSError:
+            pass
+
+
+def prepare(view, homes, locs, owner):
+    """Each space's top folder: root's, so nothing can be dropped there (File Browser gets 403);
+    each person's folder on every location: <loc>/files/<account>, File Browser's (owner)."""
+    for h in homes:
+        _set(Path(view) / "users" / h, 0o755, (0, 0))
+        for loc in locs:
+            folder = loc.root / "files" / h
+            try:
+                folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+                _set(folder, 0o700, owner)
+            except OSError as e:  # a drive gone bad: its folder is left out
+                print(f"files: {folder}: {e.strerror or e}", file=sys.stderr, flush=True)
 
 
 # --- the mounts -----------------------------------------------------------------------
@@ -145,3 +189,38 @@ def reconcile(want, had, mounted, run, same):
             continue
         now[t] = (source, read_only)
     return now
+
+
+def _same(target, source):
+    try:
+        a, b = os.stat(target), os.stat(source)
+    except OSError:
+        return False
+    return (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino)
+
+
+def main():
+    env = os.environ
+    view = Path(env["VIEW_DIR"])
+    locs = current_locations(env["DATA_DIR"], env["DRIVES_DIR"], env["REGISTRY"], env["DRIVE_STATE"])
+    owner = pwd.getpwnam(env["OWNER"])
+    accounts = homes(view)
+    prepare(view, accounts, locs, (owner.pw_uid, owner.pw_gid))
+    builtins = {"wiki": env.get("BUILTIN_WIKI") or None, "maps": env.get("BUILTIN_MAPS") or None}
+    want = wanted(view, accounts, locs, builtins)
+    try:
+        had = json.loads(Path(env["VIEW_STATE"]).read_text())
+    except (OSError, ValueError):
+        had = {}
+    mounted = {t for _, t in parse_mounts(Path("/proc/self/mounts").read_text())}
+
+    def run(args):
+        subprocess.run(args, check=True, capture_output=True, text=True)
+
+    now = reconcile(want, had if isinstance(had, dict) else {}, mounted, run, _same)
+    write_json(env["VIEW_STATE"], now)
+    print(f"files: {len(accounts)} spaces, {len(locs)} locations, {len(now)} of {len(want)} mounts", flush=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

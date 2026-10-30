@@ -1,7 +1,9 @@
 """Unit tests for files_view.py — the layout of each person's space in Files (no VM)."""
 
+import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -146,6 +148,50 @@ class ReconcileTest(unittest.TestCase):
         had = {t: list(v) for t, v in want.items()}
         self.assertEqual(self.reconcile(want, had, set(want)), want)
         self.assertEqual(self.calls, [])
+
+
+class PrepareTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        t = Path(self.tmp.name)
+        self.view = t / "view"
+        self.home = self.view / "users/anna"
+        self.home.mkdir(parents=True, mode=0o700)  # as File Browser makes it at sign-up
+        self.locs = [device(t / "data"), drive("u1", "Big", t / "drives/u1/survival-kit")]
+        self.me = (os.getuid(), os.getgid())
+
+    def folders(self):
+        return [loc.root / "files/anna" for loc in self.locs]
+
+    def test_prepare_makes_personal_folders(self):
+        files_view.prepare(self.view, ["anna"], self.locs, self.me)
+        for f in self.folders():
+            self.assertTrue(f.is_dir())
+            self.assertEqual(f.stat().st_mode & 0o777, 0o700)
+
+    def test_prepare_home_not_writable(self):
+        files_view.prepare(self.view, ["anna"], self.locs, self.me)
+        self.assertEqual(self.home.stat().st_mode & 0o777, 0o755)  # root-owned when run as root
+
+    def test_prepare_second_run_changes_nothing(self):
+        """The path unit watches view/users: a run that touches it again would trigger itself."""
+        files_view.prepare(self.view, ["anna"], self.locs, self.me)
+        before = [p.stat().st_ctime_ns for p in [self.home, *self.folders()]]
+        time.sleep(0.01)
+        files_view.prepare(self.view, ["anna"], self.locs, self.me)
+        self.assertEqual([p.stat().st_ctime_ns for p in [self.home, *self.folders()]], before)
+
+    @unittest.skipIf(os.getuid() == 0, "root may chown")
+    def test_prepare_chown_failure_ignored(self):
+        files_view.prepare(self.view, ["anna"], self.locs, (0, 0))  # like exFAT: no owners
+        self.assertTrue(all(f.is_dir() for f in self.folders()))
+
+    def test_homes_lists_accounts(self):
+        for name in ("anna@files.deck", "ben", ".tmp"):
+            (self.view / "users" / name).mkdir(exist_ok=True)
+        (self.view / "users/stray.txt").write_text("")
+        self.assertEqual(files_view.homes(self.view), ["anna", "anna@files.deck", "ben"])
 
 
 if __name__ == "__main__":

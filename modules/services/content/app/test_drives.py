@@ -82,6 +82,12 @@ class Filesystems(unittest.TestCase):
         with self.assertRaises(Refused):
             drives.mount_args("vfat")
 
+    def test_mount_args_group_writable_for_files(self):
+        shared = "uid=0,gid=990,dmask=002,fmask=113,noatime"  # Files (File Browser's group) writes too
+        self.assertEqual(drives.mount_args("exfat", 990), ["-t", "exfat", "-o", shared])
+        self.assertEqual(drives.mount_args("ntfs", 990), ["-t", "ntfs3", "-o", shared])
+        self.assertEqual(drives.mount_args("ext4", 990), ["-t", "ext4", "-o", "noatime"])
+
 
 class Registry(unittest.TestCase):
     def setUp(self):
@@ -175,6 +181,11 @@ class MountAll(unittest.TestCase):
         self.assertIn(["mount", *drives.mount_args("exfat"), src, str(self.dir / "u-2")], self.calls)
         marker = json.loads((self.dir / "u-2" / "survival-kit" / "survival-kit.json").read_text())
         self.assertEqual(marker["name"], "Photos")
+
+    def test_mount_all_passes_files_group(self):
+        src = self.plug("u-2")
+        drives.mount_all([self.drive("u-2", "exfat")], self.dir, self.fake_run, list, self.by_uuid, self.rules, group=990)
+        self.assertIn(["mount", *drives.mount_args("exfat", 990), src, str(self.dir / "u-2")], self.calls)
 
     def test_mount_all_skips_mount_when_already_ours(self):
         src = self.plug("u-1")

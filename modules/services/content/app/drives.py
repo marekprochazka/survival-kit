@@ -8,6 +8,7 @@ The box never formats a drive and touches nothing outside its survival-kit/ fold
 Standard library only.
 """
 
+import grp
 import json
 import os
 import re
@@ -87,14 +88,16 @@ def read_lsblk():
     return json.loads(subprocess.run(LSBLK, check=True, capture_output=True, text=True).stdout)
 
 
-def mount_args(fstype):
-    """`mount` arguments for a filesystem type."""
+def mount_args(fstype, group=None):
+    """`mount` arguments for a filesystem type. exFAT/NTFS have no owners: with a group (Files,
+    whose people keep their own files on drives), that group may write too."""
     if fstype in LINUX_FS:
         return ["-t", fstype, "-o", "noatime"]
+    owned = OWNED if group is None else f"uid=0,gid={group},dmask=002,fmask=113,noatime"
     if fstype == "exfat":
-        return ["-t", "exfat", "-o", OWNED]
+        return ["-t", "exfat", "-o", owned]
     if fstype == "ntfs":
-        return ["-t", "ntfs3", "-o", OWNED]  # the kernel's driver
+        return ["-t", "ntfs3", "-o", owned]  # the kernel's driver
     raise Refused(REFUSED.get(fstype, f"{fstype} drives are not supported"))
 
 
@@ -184,10 +187,11 @@ def _error(e):
     return str(e) if isinstance(e, Refused) else (e.strerror or str(e))
 
 
-def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl="systemctl"):
+def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl="systemctl", group=None):
     """Mount every recorded drive at drives_dir/<uuid>; unmount the forgotten ones.
 
-    run(args) runs a command (raises CalledProcessError); mounts() → [(source, target)].
+    run(args) runs a command (raises CalledProcessError); mounts() → [(source, target)];
+    group: see mount_args.
     Returns {uuid: {"mounted": usable now, "error": why not}} — one drive's trouble never
     stops the others.
     """
@@ -219,7 +223,7 @@ def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl=
                 for t in where:
                     run(["umount", t])  # opened on the desktop: taken over
                 target.mkdir(parents=True, exist_ok=True)
-                run(["mount", *mount_args(d["fstype"]), source, str(target)])
+                run(["mount", *mount_args(d["fstype"], group), source, str(target)])
             ensure_tree(target / "survival-kit", d["name"])
             state[uuid] = {"mounted": True, "error": None}
         except (Refused, OSError, subprocess.CalledProcessError) as e:
@@ -230,6 +234,14 @@ def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl=
     _try(run, ["udevadm", "control", "--reload"])
     _try(run, ["udevadm", "trigger", "--action=change", "--subsystem-match=block"])
     return state
+
+
+def files_group(name):
+    """The gid of Files' group, None when Files is off (no name) or the group is missing."""
+    try:
+        return grp.getgrnam(name).gr_gid if name else None
+    except KeyError:
+        return None
 
 
 def main():
@@ -259,6 +271,7 @@ def main():
         "/dev/disk/by-uuid",
         "/run/udev/rules.d/90-survival-kit-drives.rules",
         systemctl,
+        files_group(env.get("FILES_GROUP")),
     )
     out = Path(env["DRIVE_STATE"])
     out.parent.mkdir(parents=True, exist_ok=True)
