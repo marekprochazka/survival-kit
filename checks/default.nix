@@ -41,6 +41,7 @@ evalChecks
   );
   boot = import ./boot.nix args;
   services = import ./services.nix args;
+  drives = import ./drives.nix args;
   desktop = import ./desktop.nix args;
   firstboot = import ./firstboot.nix args;
   lite-closure = import ./lite-closure.nix args; # local only: builds the lite system
