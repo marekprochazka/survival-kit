@@ -30,6 +30,7 @@ let
     eval-chat = import ./eval-chat.nix args;
     eval-maps = import ./eval-maps.nix args;
     eval-storage = import ./eval-storage.nix args;
+    eval-files = import ./eval-files.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in

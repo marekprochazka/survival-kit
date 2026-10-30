@@ -33,6 +33,11 @@ in
     stateFile = constant "/var/lib/survival-kit/library.json" "What is in use / duplicate / invalid, for the content manager.";
     driveStateFile = constant "/run/survival-kit/drives.json" "Which added drives are mounted right now.";
     cacheFile = constant "/var/lib/survival-kit/content/checks.json" "Remembered check results.";
+    filesGroup = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "A group that may write on exFAT/NTFS drives (Files sets it); null: root only.";
+    };
   };
 
   config = {
@@ -71,7 +76,8 @@ in
           # the udev rules it writes re-run it when an added drive is pulled out / plugged in
           SYSTEMCTL = "${config.systemd.package}/bin/systemctl";
           PYTHONUNBUFFERED = "1";
-        };
+        }
+        // lib.optionalAttrs (cfg.filesGroup != null) { FILES_GROUP = cfg.filesGroup; };
         # not sandboxed: a mount made in a private namespace would be seen by nobody else
         serviceConfig = {
           Type = "oneshot";

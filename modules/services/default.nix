@@ -11,5 +11,6 @@
     ./lookup
     ./chat
     ./maps
+    ./files
   ];
 }
