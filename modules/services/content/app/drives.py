@@ -108,16 +108,19 @@ class Registry:
         self.path = Path(path)
 
     def drives(self):
+        """The list; Refused when the file is damaged (never silently treated as empty)."""
         try:
-            return json.loads(self.path.read_text())
+            items = json.loads(self.path.read_text())
         except FileNotFoundError:
             return []
+        except ValueError as e:
+            raise Refused(f"the list of added drives ({self.path}) is damaged: {e}") from e
+        if not isinstance(items, list):
+            raise Refused(f"the list of added drives ({self.path}) is damaged")
+        return items
 
     def _write(self, items):
-        tmp = self.path.with_name(f".{self.path.name}.tmp")
-        tmp.write_text(json.dumps(items, indent=1) + "\n")
-        tmp.chmod(0o644)
-        os.replace(tmp, self.path)
+        write_json(self.path, items)
 
     def add(self, uuid, fstype, name, today):
         items = self.drives()
@@ -132,10 +135,25 @@ class Registry:
         self._write([d for d in items if d["uuid"] != uuid])
 
 
-def udev_rules(uuids):
-    """Hide added drives from the desktop: no Eject/Safely remove under running services."""
+def write_json(path, data):
+    """Atomically (temp file + rename): readers never see half a file."""
+    path = Path(path)
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps(data, indent=1) + "\n")
+    tmp.chmod(0o644)
+    os.replace(tmp, path)
+
+
+def udev_rules(uuids, systemctl="systemctl"):
+    """Hide added drives from the desktop (no Eject/Safely remove under running services), and
+    re-run the mounting when one is pulled out or plugged back in."""
     lines = ["# survival-kit: added drives (written by survival-kit-drives.service)"]
-    lines += [f'ENV{{ID_FS_UUID}}=="{u}", ENV{{UDISKS_IGNORE}}="1"' for u in uuids]
+    for u in uuids:
+        lines.append(f'ENV{{ID_FS_UUID}}=="{u}", ENV{{UDISKS_IGNORE}}="1"')
+        lines.append(
+            f'ACTION=="add|remove", SUBSYSTEM=="block", ENV{{ID_FS_UUID}}=="{u}", '
+            f'RUN+="{systemctl} --no-block restart survival-kit-drives.service"'
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -166,7 +184,7 @@ def _error(e):
     return str(e) if isinstance(e, Refused) else (e.strerror or str(e))
 
 
-def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file):
+def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl="systemctl"):
     """Mount every recorded drive at drives_dir/<uuid>; unmount the forgotten ones.
 
     run(args) runs a command (raises CalledProcessError); mounts() → [(source, target)].
@@ -182,13 +200,19 @@ def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file):
     state = {}
     for d in recorded:
         uuid, target = d["uuid"], drives_dir / d["uuid"]
+        here = [s for s, t in current if t == str(target)]  # what is mounted at our folder now
         try:
             device = Path(by_uuid) / uuid
             if not device.exists():
+                if here:  # pulled out: the kernel keeps a dead mount until it is unmounted
+                    _try(run, ["umount", "-l", str(target)])
                 raise Refused("not connected")
             source = os.path.realpath(device)
-            where = [t for s, t in current if s == source]
-            if str(target) not in where:
+            if here and here[-1] != source:  # back as another device: the old mount is dead
+                _try(run, ["umount", "-l", str(target)])
+                here = []
+            where = [t for s, t in current if s == source and t != str(target)]
+            if not here:
                 for t in where:
                     if not t.startswith(DESKTOP):
                         raise Refused(f"the drive is in use at {t}")
@@ -202,7 +226,7 @@ def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file):
             state[uuid] = {"mounted": False, "error": _error(e)}
     rules = Path(rules_file)
     rules.parent.mkdir(parents=True, exist_ok=True)
-    rules.write_text(udev_rules([d["uuid"] for d in recorded]))
+    rules.write_text(udev_rules([d["uuid"] for d in recorded], systemctl))
     _try(run, ["udevadm", "control", "--reload"])
     _try(run, ["udevadm", "trigger", "--action=change", "--subsystem-match=block"])
     return state
@@ -216,7 +240,12 @@ def main():
     def run(args):
         subprocess.run(args, check=True, capture_output=True, text=True)
 
-    recorded = Registry(env["REGISTRY"]).drives()
+    systemctl = env.get("SYSTEMCTL", "systemctl")
+    try:
+        recorded = Registry(env["REGISTRY"]).drives()
+    except Refused as e:  # never unmount everything because the list can't be read
+        print(f"drives: {e}", file=sys.stderr, flush=True)
+        return
     # at boot a USB drive may show up a few seconds late: wait up to 10 s for missing ones
     for _ in range(10):
         if all((Path("/dev/disk/by-uuid") / d["uuid"]).exists() for d in recorded):
@@ -229,12 +258,15 @@ def main():
         lambda: parse_mounts(Path("/proc/self/mounts").read_text()),
         "/dev/disk/by-uuid",
         "/run/udev/rules.d/90-survival-kit-drives.rules",
+        systemctl,
     )
     out = Path(env["DRIVE_STATE"])
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(state))
+    write_json(out, state)
     for uuid, s in state.items():
         print(f"drives: {uuid}: {'mounted' if s['mounted'] else s['error']}", flush=True)
+    # rebuild the library (no-op at boot: it starts after this unit) — e.g. after a pull-out
+    subprocess.run([systemctl, "--no-block", "try-restart", "survival-kit-library.service"], check=False)
 
 
 if __name__ == "__main__":

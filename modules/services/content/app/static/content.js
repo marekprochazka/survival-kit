@@ -139,6 +139,7 @@ onClick("button[data-action=add]", async ({ drive, name }) => {
 });
 
 onClick("button[data-action=reconnect]", async ({ drive }) => {
+  say("reconnecting… (this can take a few seconds)");
   const r = await api("POST", `/api/drives/${encodeURIComponent(drive)}/reconnect`);
   if (!r.mounted) {
     say(`still not available: ${r.error}`, true);
@@ -158,5 +159,5 @@ onClick("button[data-resolve]", async ({ resolve: at, count }) => {
     return false;
   }
   const r = await api("POST", "/api/resolve?" + new URLSearchParams({ at }));
-  say(`moved aside: ${r.moved.join(", ")}`);
+  alert(`Moved into the set-aside folder: ${r.moved.join(", ") || "nothing"}`); // before the reload
 });

@@ -22,9 +22,10 @@ assert lib.assertMsg (
     "/var/lib/survival-kit/content"
     "/var/lib/survival-kit/data"
     "/var/lib/survival-kit/drives"
-    "/var/lib/survival-kit/set-aside"
   ]
-) "the service may write only to its own dir, the content trees and the set-aside dir";
+) "the service may write only to its own dir and the content trees";
+assert lib.assertMsg (lib.hasPrefix "/var/lib/survival-kit/data/" svc.environment.SET_ASIDE_DIR)
+  "this device's set-aside dir is inside its tree (one mount: auto-resolve renames)";
 assert lib.assertMsg (
   svc.environment.REGISTRY == "/var/lib/survival-kit/content/drives.json"
   && svc.environment.DATA_DIR == "/var/lib/survival-kit/data"

@@ -27,7 +27,9 @@ in
     libraryDir = constant "/var/lib/survival-kit/library" "The merged index (a symlink, swapped atomically).";
     # in the content manager's own dir: it rewrites the list (temp file + rename) there
     registryFile = constant "/var/lib/survival-kit/content/drives.json" "The added drives (runtime data, no rebuild).";
-    setAsideDir = constant "/var/lib/survival-kit/set-aside" "Where auto-resolve moves this device's invalid and duplicate files.";
+    # inside the data tree (hidden): the content manager's sandbox makes each writable path
+    # its own mount, and a rename between two mounts fails — even on the same disk
+    setAsideDir = constant "/var/lib/survival-kit/data/.set-aside" "Where auto-resolve moves this device's invalid and duplicate files.";
     stateFile = constant "/var/lib/survival-kit/library.json" "What is in use / duplicate / invalid, for the content manager.";
     driveStateFile = constant "/run/survival-kit/drives.json" "Which added drives are mounted right now.";
     cacheFile = constant "/var/lib/survival-kit/content/checks.json" "Remembered check results.";
@@ -48,7 +50,6 @@ in
         "d ${cfg.dataDir} 0755 root root -"
         "d ${cfg.drivesDir} 0755 root root -"
         "d ${dirOf cfg.cacheFile} 0755 root root -"
-        "d ${cfg.setAsideDir} 0755 root root -"
       ];
 
       # added drives: runtime data (drives.json), mounted by UUID; a missing one never fails boot
@@ -67,6 +68,8 @@ in
           REGISTRY = cfg.registryFile;
           DRIVES_DIR = cfg.drivesDir;
           DRIVE_STATE = cfg.driveStateFile;
+          # the udev rules it writes re-run it when an added drive is pulled out / plugged in
+          SYSTEMCTL = "${config.systemd.package}/bin/systemctl";
           PYTHONUNBUFFERED = "1";
         };
         # not sandboxed: a mount made in a private namespace would be seen by nobody else

@@ -27,6 +27,7 @@ import json
 import os
 import shutil
 import subprocess
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -98,6 +99,7 @@ def _drives(s, e):
 
     out = [
         '<section id="drives"><h2>Drives</h2>',
+        *([f'<p class="error">{e(s["drives"]["error"])}</p>'] if s["drives"].get("error") else []),
         "<p>Books and maps can live on this device and on drives that stay plugged in. "
         "Files the box can't use, and older copies of a book or map it has elsewhere, are marked "
         "&ldquo;not in use&rdquo;; <em>Auto-resolve</em> moves them out of the way (nothing is deleted).</p>",
@@ -211,6 +213,8 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
     """places: library.Places. models / maps / drives: None when the box has no AI models
     (lite) / no maps service / no drive support (tests)."""
 
+    lock = threading.Lock()  # one drive action / auto-resolve at a time (drives.json, renames)
+
     def status():
         device = places.get("device")
         total, free = places.disk(device)
@@ -223,7 +227,10 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
                 model_items, models_error = [], MODELS_DOWN
         locs = []
         for loc in places.all():
-            t, f = places.disk(loc)
+            try:
+                t, f = places.disk(loc)
+            except OSError:  # a drive going away right now: left out, the page still works
+                continue
             locs.append({"id": loc.id, "name": loc.name, "total": t, "free": f,
                          "wiki": wiki.used(loc.id), "maps": maps.used(loc.id) if maps else 0})
         return {
@@ -247,11 +254,13 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
     def drive_status():
         if drives is None:
             return {"added": [], "available": []}
-        state = drives.state()
-        added = drives.registry.drives()
+        try:
+            added = drives.registry.drives()
+        except Refused as e:  # damaged list: say so, keep the rest of the page
+            return {"added": [], "available": [], "error": str(e)}
         known = {d["uuid"] for d in added}
         return {
-            "added": [d | state.get(d["uuid"], {"mounted": False, "error": "not mounted yet"}) for d in added],
+            "added": [d | drive_result(d["uuid"]) for d in added],
             "available": [c for c in drives.candidates() if c["uuid"] not in known],
         }
 
@@ -417,17 +426,27 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
                     return self.send(200, {"uuid": uuid, "result": "reconnected"} | drive_result(uuid))
                 raise Refused("not found", status=404)
 
+            def locked(fn):
+                def run():
+                    with lock:
+                        fn()
+
+                return run
+
             if path == "/api/resolve":
-                return self.route(resolve)
+                return self.route(locked(resolve))
             if path == "/api/drives/add":
-                return self.route(add)
+                return self.route(locked(add))
             if path.startswith("/api/drives/"):
-                return self.route(drive_action)
+                return self.route(locked(drive_action))
             self.send(404, {"error": "not found"})
 
     def drive_result(uuid):
-        s = drives.state().get(uuid, {"mounted": False, "error": "not mounted"})
-        return {"mounted": s["mounted"], "error": s["error"]}
+        """Mounted = usable right now (checked live, not just the last mount run's word)."""
+        if any(loc.id == uuid for loc in places.all()):
+            return {"mounted": True, "error": None}
+        s = drives.state().get(uuid, {})
+        return {"mounted": False, "error": (not s.get("mounted") and s.get("error")) or "not connected"}
 
     httpd = ThreadingHTTPServer(("127.0.0.1", config.port), Handler)
     httpd.daemon_threads = True

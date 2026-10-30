@@ -102,6 +102,15 @@ class Registry(unittest.TestCase):
             self.reg.add("u-1", "ext4", "Clone", "2026-10-31")
         self.assertIn("already added", str(cm.exception))
 
+    def test_damaged_list_refused_not_overwritten(self):
+        self.reg.path.write_text("{nope")
+        with self.assertRaises(Refused) as cm:
+            self.reg.drives()
+        self.assertIn("damaged", str(cm.exception))
+        with self.assertRaises(Refused):
+            self.reg.add("u-1", "ext4", "Big", "2026-10-30")
+        self.assertEqual(self.reg.path.read_text(), "{nope")
+
     def test_forget(self):
         self.reg.add("u-1", "ext4", "Big", "2026-10-30")
         self.reg.forget("u-1")
@@ -116,6 +125,22 @@ class Udev(unittest.TestCase):
         rules = drives.udev_rules(["u-1", "u-2"])
         self.assertIn('ENV{ID_FS_UUID}=="u-1", ENV{UDISKS_IGNORE}="1"', rules)
         self.assertIn('ENV{ID_FS_UUID}=="u-2", ENV{UDISKS_IGNORE}="1"', rules)
+
+    def test_udev_rules_react_to_unplug_and_replug(self):
+        rules = drives.udev_rules(["u-1"], systemctl="/x/bin/systemctl")
+        self.assertIn(
+            'ACTION=="add|remove", SUBSYSTEM=="block", ENV{ID_FS_UUID}=="u-1", '
+            'RUN+="/x/bin/systemctl --no-block restart survival-kit-drives.service"',
+            rules,
+        )
+
+
+class WriteJson(unittest.TestCase):
+    def test_write_json_atomic(self):
+        d = Path(tempfile.mkdtemp())
+        drives.write_json(d / "state.json", {"u-1": {"mounted": True, "error": None}})
+        self.assertEqual(json.loads((d / "state.json").read_text())["u-1"]["mounted"], True)
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["state.json"])
 
 
 class MountAll(unittest.TestCase):
@@ -199,6 +224,21 @@ class MountAll(unittest.TestCase):
 
         state = drives.mount_all([self.drive("u-1")], self.dir, run, lambda: [], self.by_uuid, self.rules)
         self.assertEqual(state["u-1"], {"mounted": False, "error": "mount: wrong fs type"})
+
+    def test_mount_all_clears_dead_mount_when_drive_gone(self):
+        self.mounted.append(("/dev/vdb", str(self.dir / "u-1")))  # still mounted after an unplug
+        state = self.mount_all([self.drive("u-1")])
+        self.assertEqual(state["u-1"], {"mounted": False, "error": "not connected"})
+        self.assertIn(["umount", "-l", str(self.dir / "u-1")], self.calls)
+
+    def test_mount_all_remounts_when_device_changed(self):
+        src = self.plug("u-1")  # back, as another device node
+        self.mounted.append(("/dev/vdb", str(self.dir / "u-1")))
+        state = self.mount_all([self.drive("u-1")])
+        self.assertTrue(state["u-1"]["mounted"])
+        umount = self.calls.index(["umount", "-l", str(self.dir / "u-1")])
+        mount = self.calls.index(["mount", *drives.mount_args("ext4"), src, str(self.dir / "u-1")])
+        self.assertLess(umount, mount)
 
     def test_mount_all_writes_udev_rules_and_reloads(self):
         self.plug("u-1")

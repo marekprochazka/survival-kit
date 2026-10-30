@@ -35,8 +35,9 @@ class Tree(unittest.TestCase):
     def test_marker_not_json_refused(self):
         self.root.mkdir()
         (self.root / "survival-kit.json").write_text("{nope")
-        with self.assertRaises(Refused):
+        with self.assertRaises(Refused) as cm:
             locations.ensure_tree(self.root, "X")
+        self.assertIn("Forget", str(cm.exception))  # the drive stays hidden until forgotten
         self.assertEqual((self.root / "survival-kit.json").read_text(), "{nope")
         self.assertFalse((self.root / "wiki").exists())
 

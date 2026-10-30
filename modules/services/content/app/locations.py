@@ -38,7 +38,9 @@ def read_marker(root):
     try:
         data = json.loads(path.read_text())
     except (OSError, ValueError) as e:
-        raise Refused(f"{path} can't be read ({e}); fix or remove it") from e
+        raise Refused(
+            f"{path} can't be read ({e}) — Forget the drive, fix or remove that file on another computer, then add it again"
+        ) from e
     if not isinstance(data, dict) or not isinstance(data.get("format"), int):
         raise Refused(f"{path} is not a survival-kit marker")
     if data["format"] > FORMAT:

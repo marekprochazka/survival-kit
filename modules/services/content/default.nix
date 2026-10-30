@@ -71,7 +71,6 @@ in
           stateDir # incl. the list of added drives
           storage.dataDir
           storage.drivesDir # the added drives are mounted below it
-          storage.setAsideDir
         ];
         ProtectHome = true;
         PrivateTmp = true;

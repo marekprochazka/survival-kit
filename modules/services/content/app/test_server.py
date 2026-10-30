@@ -330,6 +330,24 @@ class Api(unittest.TestCase):
         statuses = {(i["location"], i["name"]): i["status"] for i in self.json("GET", "/api/status")[1]["wiki"]}
         self.assertEqual(statuses, {("device", "book.zim"): "in_use", ("u-1", "keep.zim"): "in_use"})
 
+    def test_resolve_on_this_device(self):
+        (self.zims / "junk.zim").write_bytes(b"x")
+        (self.zims / "survival-kit.zim").write_bytes(b"manual?")
+        self.box.rebuild()
+        status, r = self.json("POST", "/api/resolve?at=device")
+        self.assertEqual((status, r["moved"]), (200, ["survival-kit.zim"]))
+        self.assertEqual([p.name for p in (self.dev / ".set-aside").glob("*/wiki/*")], ["survival-kit.zim"])
+
+    def test_damaged_drive_list_keeps_the_page(self):
+        self.box.registry.write_text("{nope")
+        status, s = self.json("GET", "/api/status")
+        self.assertEqual(status, 200)
+        self.assertIn("damaged", s["drives"]["error"])
+        self.assertIn(b"damaged", self.call("GET", "/")[1])
+        self.offer("u-1")
+        self.assertEqual(self.json("POST", "/api/drives/add?uuid=u-1")[0], 400)
+        self.assertEqual(self.box.registry.read_text(), "{nope")
+
     def test_status_lists_locations_and_drives(self):
         self.add_drive("u-1")
         self.offer("u-2", label="OTHER")

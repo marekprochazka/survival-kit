@@ -145,6 +145,27 @@ class Index(Base):
         self.assertEqual((self.drive.root / "wiki").stat().st_mode & 0o777, 0o755)
 
 
+class Unreadable(Base):
+    def test_unreadable_location_left_out(self):
+        """A dead mount (EIO) or a locked folder must not stop the library."""
+        self.put(self.device, "wiki", "here.zim")
+        self.put(self.drive, "wiki", "far.zim")
+        (self.drive.root / "wiki").chmod(0)
+        self.addCleanup((self.drive.root / "wiki").chmod, 0o755)
+        entries = library.resolve([self.device, self.drive], "wiki", fake_check({}), PROTECTED)
+        self.assertEqual(self.status(entries), {("device", "here.zim"): "in_use"})
+
+    def test_build_opens_the_tree_on_a_drive(self):
+        a = self.put(self.drive, "wiki", "a.zim")
+        self.drive.root.chmod(0o700)  # survival-kit/, made by a user with umask 077
+        self.tmp.chmod(0o700)  # the drive's root
+        self.addCleanup(self.tmp.chmod, 0o755)
+        Index.build(self)
+        self.assertEqual(self.drive.root.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(self.tmp.stat().st_mode & 0o777, 0o755)
+        self.assertTrue(a.exists())
+
+
 class Cache(Base):
     def test_cache_reuses_until_changed(self):
         p = self.put(self.drive, "wiki", "a.zim")
@@ -200,9 +221,26 @@ class Current(Base):
         state = self.tmp / "state.json"
         state.write_text(json.dumps({"u-a": {"mounted": True, "error": None}, "u-b": {"mounted": True, "error": None},
                                      "u-c": {"mounted": False, "error": "not connected"}}))
-        locs = library.current_locations(self.tmp / "data", self.tmp / "drives", reg, state)
+        locs = library.current_locations(self.tmp / "data", self.tmp / "drives", reg, state, present=lambda u, t: True)
         self.assertEqual([(l.id, l.name, l.order) for l in locs], [("device", "This device", 0), ("u-b", "B", 1), ("u-a", "A", 2)])
         self.assertEqual(locs[1].root, self.tmp / "drives" / "u-b" / "survival-kit")
+
+    def test_current_locations_skips_drive_not_here_now(self):
+        """A drive pulled out: the last mount run still says mounted, but it's gone."""
+        reg = self.tmp / "drives.json"
+        reg.write_text(json.dumps([{"uuid": "u-a", "fstype": "ext4", "name": "A", "added": "2026-10-30"}]))
+        state = self.tmp / "state.json"
+        state.write_text(json.dumps({"u-a": {"mounted": True, "error": None}}))
+        locs = library.current_locations(self.tmp / "data", self.tmp / "drives", reg, state, present=lambda u, t: False)
+        self.assertEqual([l.id for l in locs], ["device"])
+
+    def test_drive_present_needs_device_and_mount(self):
+        by_uuid = self.tmp / "by-uuid"
+        by_uuid.mkdir()
+        self.assertFalse(library.drive_present("u-a", self.tmp, by_uuid))  # unplugged
+        (by_uuid / "u-a").write_text("")
+        self.assertFalse(library.drive_present("u-a", self.tmp / "data", by_uuid))  # not a mount
+        self.assertTrue(library.drive_present("u-a", Path("/"), by_uuid))
 
     def test_current_locations_without_drive_files(self):
         locs = library.current_locations(self.tmp / "data", self.tmp / "drives", self.tmp / "none.json", self.tmp / "none2.json")

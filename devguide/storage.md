@@ -53,8 +53,10 @@ and map. Kiwix (`kiwix-library`) and nginx (`maps.deck/imported/`) read only thi
 
 **Auto-resolve** (content manager, per location) *moves* that location's `invalid` and
 `duplicate` files to `survival-kit-set-aside/<date>/<kind>/` at the drive's root (this
-device: `/var/lib/survival-kit/set-aside/`) — a rename on the same filesystem, never a
-delete; a name already there gets `-1`, `-2`, …
+device: `/var/lib/survival-kit/data/.set-aside/` — inside the data tree, because the content
+manager's sandbox makes each writable path its own mount and a rename between two mounts
+fails) — a rename on the same filesystem, never a delete; a name already there gets `-1`,
+`-2`, …
 
 ## Added drives
 
@@ -73,9 +75,15 @@ every Add / Forget / Reconnect:
   first); a mount anywhere else → refused. Then `mount` at `drives/<uuid>` and create/check
   the tree. One drive's trouble never stops the others; results go to
   `/run/survival-kit/drives.json` (`{uuid: {mounted, error}}`), which the library reads;
-- writes `/run/udev/rules.d/90-survival-kit-drives.rules` (`UDISKS_IGNORE=1` per listed
-  drive) — added drives are hidden from the desktop, so nobody "ejects" a drive the wiki
-  reads from.
+- a drive that is gone but still mounted (the kernel keeps a dead mount after a pull-out),
+  or mounted from a device node it no longer has, is unmounted (`umount -l`) first;
+- writes `/run/udev/rules.d/90-survival-kit-drives.rules`: per listed drive
+  `UDISKS_IGNORE=1` (hidden from the desktop, so nobody "ejects" a drive the wiki reads
+  from) and a rule that re-runs this service when the drive is pulled out or plugged in;
+- writes its result atomically and asks the library to rebuild.
+
+A damaged `drives.json` is reported (content manager page, journal) and never treated as an
+empty list — nothing gets unmounted because the list can't be read.
 
 Filesystems (`boot.supportedFilesystems`): ext4, btrfs, xfs, f2fs (`noatime`); exFAT and NTFS
 (kernel `ntfs3`) with `uid=0,gid=0,dmask=022,fmask=133` — root writes, everyone reads.
@@ -84,8 +92,13 @@ and can't be added. Offered at all: filesystems on disks the system doesn't use 
 with anything mounted outside `/run/media/` and `drives/` (the system disk, swap) is never
 offered, free partitions included. `lsblk --json` is the source.
 
-A drive pulled out while running: its files disappear from the library at the next rebuild
-(Reconnect, Forget, any import, reboot); until then Kiwix answers errors for its books only.
+A drive pulled out while running: the udev rule re-runs the mounting, which clears the dead
+mount and rebuilds the library — its books and maps disappear within seconds, the rest keeps
+working. Plugged back in, it is mounted again the same way. Whether a drive is usable is
+always checked **live** (its `/dev/disk/by-uuid` entry exists and our mount is in place),
+not taken from the last mount run; the library also leaves out a location it can't read
+(a dead mount answers I/O errors) instead of failing. *Reconnect* re-runs the mounting by
+hand.
 
 ## AI models
 
@@ -98,5 +111,6 @@ in `/var/lib/ollama/models` on this device.
 Unit tests: `test_locations.py`, `test_library.py`, `test_drives.py` (fake `lsblk` output, a
 fake command runner) and the location parts of `test_content.py`/`test_server.py`. VM test
 `checks/drives.nix`: three extra disks (empty ext4, pre-filled exFAT, FAT32) — add, import
-to a drive, used in place, auto-resolve, hidden from udisks, reboot, unplug + reconnect,
+to a drive, used in place, auto-resolve (drive and this device), hidden from udisks, reboot
+with a listed drive missing, a real unplug (the disk removed from the PCI bus) and plug back,
 forget.

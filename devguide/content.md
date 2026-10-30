@@ -76,7 +76,7 @@ upload or a write error removes the temp file; leftovers are cleared at service 
 It runs as root — it writes into the content trees and restarts the drive and library
 units — but confined: `ProtectSystem=strict` with write access only to its own state dir
 (incl. `drives.json`), `/var/lib/survival-kit/data`, `/var/lib/survival-kit/drives` (drives
-mounted later show up inside, tested) and `/var/lib/survival-kit/set-aside`; `ProtectHome`,
+mounted later show up inside, tested); `ProtectHome`,
 `PrivateTmp`, `NoNewPrivileges`. Ollama keeps its models itself; the service only talks to it.
 
 Open to anyone who can reach the page (today: the box itself). A password option is in the

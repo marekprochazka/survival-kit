@@ -1,7 +1,7 @@
 # Layer 3 — added drives VM test (local only, ADR-0006): three extra virtual disks — an
 # empty ext4 drive, a pre-filled exFAT drive and a FAT32 stick — added through the content
-# manager's API; books spread over this device and two drives; auto-resolve; reboot,
-# unplug + reconnect, forget.
+# manager's API; books spread over this device and two drives; auto-resolve (drive and this
+# device); reboot with a listed drive missing; a real unplug (PCI remove) + plug back; forget.
 {
   pkgs,
   self,
@@ -37,11 +37,14 @@ pkgs.testers.runNixOSTest {
   };
   testScript = ''
     import json
+    import shlex
 
     EXT = "11111111-2222-3333-4444-555555555555"
     FAT = "ABCD-1234"
     EXFAT = None  # mkfs.exfat can't set the serial: read back after formatting
     DRIVES = "/var/lib/survival-kit/drives"
+    REGISTRY = "/var/lib/survival-kit/content/drives.json"
+    GONE = "0000-DEAD"  # listed, never plugged in
     CATALOG = "${curl} -sf 'https://wiki.deck/catalog/v2/entries?count=-1'"
 
     def api(method, path):
@@ -64,6 +67,9 @@ pkgs.testers.runNixOSTest {
 
     def map_code():
         return machine.succeed("${curl} -s -o /dev/null -w '%{http_code}' -r 0-126 https://maps.deck/imported/austria.pmtiles").strip()
+
+    def added(uuid):
+        return next(d for d in status()["drives"]["added"] if d["uuid"] == uuid)
 
     def ready():
         machine.wait_for_unit("survival-kit-content.service")
@@ -128,13 +134,25 @@ pkgs.testers.runNixOSTest {
         machine.succeed(f"test -f {DRIVES}/{EXFAT}/other/notes.txt")  # never touched
         served("near-test")  # the device's copy still serves
 
+    with subtest("auto-resolve on this device (a rename inside the content manager's sandbox)"):
+        machine.succeed("echo garbage > /var/lib/survival-kit/data/wiki/junk-here.zim")
+        machine.succeed("systemctl restart survival-kit-library.service")
+        assert wiki("device").get("junk-here.zim") == "invalid", wiki("device")
+        r = api("POST", "/api/resolve?at=device")
+        assert r.get("moved") == ["junk-here.zim"], r
+        machine.succeed("test -f /var/lib/survival-kit/data/.set-aside/*/wiki/junk-here.zim")
+        served("near-test")
+
     with subtest("added drives are hidden from the desktop"):
         machine.succeed("udevadm settle")
         machine.succeed("udevadm info --query=property /dev/vdb | grep -q '^UDISKS_IGNORE=1'")
         machine.succeed("udevadm info --query=property /dev/vdc | grep -q '^UDISKS_IGNORE=1'")
         machine.fail("udevadm info --query=property /dev/vdd | grep -q '^UDISKS_IGNORE=1'")
 
-    with subtest("a reboot keeps the drives"):
+    with subtest("a reboot keeps the drives, also with a listed drive missing"):
+        listed = json.loads(machine.succeed(f"cat {REGISTRY}"))
+        listed.append({"uuid": GONE, "fstype": "ext4", "name": "Gone", "added": "2026-10-30"})
+        machine.succeed(f"echo {shlex.quote(json.dumps(listed))} > {REGISTRY}")
         machine.shutdown()
         machine.start()
         ready()
@@ -142,18 +160,32 @@ pkgs.testers.runNixOSTest {
         for book in ["near-test", "big-test", "far-test"]:
             served(book)
         assert map_code() == "206"
+        assert added(GONE)["mounted"] is False and added(GONE)["error"] == "not connected", added(GONE)
+        assert 'data-drive="' + GONE + '" data-action="reconnect"' in machine.succeed("${curl} -sf https://content.deck/")
+        machine.succeed(f"${curl} -sf -X POST https://content.deck/api/drives/{GONE}/forget")
 
-    with subtest("a drive pulled out: its content disappears, the rest keeps working"):
-        machine.succeed(f"umount -l {DRIVES}/{EXT}")
-        machine.succeed("systemctl restart survival-kit-library.service")
+    with subtest("a drive really pulled out: noticed on its own, the rest keeps working"):
+        pci = machine.succeed("readlink -f /sys/block/vdb/device/..").strip()
+        machine.succeed(f"echo 1 > {pci}/remove")  # the disk vanishes, like a pulled USB cable
         gone("big-test")
-        assert map_code() == "404"
+        machine.wait_until_succeeds("test $(${curl} -s -o /dev/null -w '%{http_code}' -r 0-126 https://maps.deck/imported/austria.pmtiles) = 404")
+        machine.fail(f"findmnt -n -T {DRIVES}/{EXT} -S UUID={EXT}")  # the dead mount is cleared
         served("far-test")
         served("near-test")
-        r = api("POST", f"/api/drives/{EXT}/reconnect")
-        assert r["mounted"], r
+        assert added(EXT)["mounted"] is False, added(EXT)
+        assert 'data-drive="' + EXT + '" data-action="reconnect"' in machine.succeed("${curl} -sf https://content.deck/")
+        # an import to this device still works (no crash on the dead drive)
+        r = json.loads(machine.succeed(
+            "${curl} -s 'https://content.deck/api/upload?kind=wiki&file=near-test.zim&to=device' -T ${nearZim}"))
+        assert r.get("result") == "replaced", r
+
+    with subtest("plugged back in: mounted again on its own"):
+        machine.succeed("echo 1 > /sys/bus/pci/rescan")
         served("big-test")
-        assert map_code() == "206"
+        machine.wait_until_succeeds("test $(${curl} -s -o /dev/null -w '%{http_code}' -r 0-126 https://maps.deck/imported/austria.pmtiles) = 206")
+        assert added(EXT)["mounted"] is True, added(EXT)
+        r = api("POST", f"/api/drives/{EXT}/reconnect")  # the button still works when all is fine
+        assert r["mounted"], r
 
     with subtest("forget: content gone from the box, files stay on the drive"):
         r = api("POST", f"/api/drives/{EXFAT}/forget")

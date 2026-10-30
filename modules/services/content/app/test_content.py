@@ -32,7 +32,8 @@ class Box:
         self.drive_state = self.root / "run-drives.json"
         self.places = library.Places(
             self.root / "data", self.root / "drives", self.registry, self.drive_state,
-            self.root / "library.json", self.root / "set-aside", usage=usage,
+            self.root / "library.json", self.root / "data" / ".set-aside", usage=usage,
+            present=lambda uuid, target: (target / "survival-kit").is_dir(),
         )
         self.rebuild()
 

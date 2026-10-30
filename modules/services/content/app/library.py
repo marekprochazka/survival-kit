@@ -45,16 +45,21 @@ def resolve(locs, kind, check, protected):
     """
     entries = []
     for loc in sorted(locs, key=lambda loc: loc.order):
-        for e in scan(loc, kind):
-            e.update(kind=kind, order=loc.order, date=None, reason=None)
-            if e["refusal"]:
-                e.update(status="invalid", reason=e["refusal"])
-            elif kind == "wiki" and e["name"][:-4] in protected:
-                e.update(status="invalid", reason="the box's own manual can't be replaced")
-            else:
-                r = check(e["path"], kind)
-                e.update(status="in_use" if r["ok"] else "invalid", reason=r["reason"], date=r["date"])
-            entries.append(e)
+        try:
+            found = scan(loc, kind)
+            for e in found:
+                e.update(kind=kind, order=loc.order, date=None, reason=None)
+                if e["refusal"]:
+                    e.update(status="invalid", reason=e["refusal"])
+                elif kind == "wiki" and e["name"][:-4] in protected:
+                    e.update(status="invalid", reason="the box's own manual can't be replaced")
+                else:
+                    r = check(e["path"], kind)
+                    e.update(status="in_use" if r["ok"] else "invalid", reason=r["reason"], date=r["date"])
+        except OSError as err:  # a dead mount (pulled out), a locked folder: leave it out
+            print(f"library: {loc.name}: {kind} can't be read ({err}); left out", file=sys.stderr, flush=True)
+            continue
+        entries += found
     groups = {}
     for e in entries:
         if e["status"] == "in_use":
@@ -152,7 +157,11 @@ def build_index(entries_by_kind, library):
         (new / kind).mkdir(parents=True)
         for e in entries:
             if e["status"] == "in_use":
-                _readable(e["path"].parent, 0o555)  # kiwix-serve and nginx run unprivileged
+                # kiwix-serve and nginx run unprivileged: they must reach the file
+                if e["location"] != "device":
+                    _readable(e["path"].parents[2], 0o555)  # the drive's root
+                    _readable(e["path"].parents[1], 0o555)  # its survival-kit/
+                _readable(e["path"].parent, 0o555)
                 _readable(e["path"], 0o444)
                 os.symlink(e["path"], new / kind / e["name"])
     new.chmod(0o755)
@@ -201,12 +210,19 @@ def _json(path, default):
         return default
 
 
-def current_locations(data_dir, drives_dir, registry_file, drive_state_file):
-    """This device, then every added drive that is mounted now, in the order they were added."""
+def drive_present(uuid, target, by_uuid=Path("/dev/disk/by-uuid")):
+    """Is the drive here right now — plugged in, and our mount in place? (The last mount
+    run's state can't tell: after a pull-out the kernel keeps a dead mount.)"""
+    return (Path(by_uuid) / uuid).exists() and os.path.ismount(target)
+
+
+def current_locations(data_dir, drives_dir, registry_file, drive_state_file, present=drive_present):
+    """This device, then every added drive that is usable now, in the order they were added."""
     locs = [Location(id="device", name=DEVICE_NAME, root=Path(data_dir), order=0)]
     state = _json(drive_state_file, {})
-    for n, d in enumerate(_json(registry_file, []), start=1):
-        if state.get(d["uuid"], {}).get("mounted"):
+    drives = _json(registry_file, [])
+    for n, d in enumerate(drives if isinstance(drives, list) else [], start=1):
+        if state.get(d["uuid"], {}).get("mounted") and present(d["uuid"], Path(drives_dir) / d["uuid"]):
             locs.append(Location(id=d["uuid"], name=d["name"], root=Path(drives_dir) / d["uuid"] / "survival-kit", order=n))
     return locs
 
@@ -231,7 +247,8 @@ class Places:
     usage(path) → (total, free) bytes of the filesystem holding path.
     """
 
-    def __init__(self, data_dir, drives_dir, registry_file, drive_state_file, state_file, setaside_dir, usage=None):
+    def __init__(self, data_dir, drives_dir, registry_file, drive_state_file, state_file, setaside_dir, usage=None,
+                 present=drive_present):
         self.data_dir = Path(data_dir)
         self.drives_dir = Path(drives_dir)
         self.registry_file = registry_file
@@ -239,9 +256,10 @@ class Places:
         self.state_file = Path(state_file)
         self.setaside_dir = Path(setaside_dir)
         self.usage = usage or (lambda p: (shutil.disk_usage(p).total, shutil.disk_usage(p).free))
+        self.present = present
 
     def all(self):
-        return current_locations(self.data_dir, self.drives_dir, self.registry_file, self.drive_state_file)
+        return current_locations(self.data_dir, self.drives_dir, self.registry_file, self.drive_state_file, self.present)
 
     def get(self, id):
         for loc in self.all():

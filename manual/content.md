@@ -59,8 +59,9 @@ box can't use are marked *invalid*, and if this box already has the same book or
 moves all such files into a `survival-kit-set-aside` folder on the drive — nothing is
 deleted.
 
-**Unplugged?** Its books and maps disappear until it's back; click **Reconnect** (or
-restart). **Forget** stops using a drive for good; its files stay on it.
+**Unplugged?** Its books and maps disappear after a few seconds, and come back by themselves
+when you plug the drive in again (if not, click **Reconnect**). **Forget** stops using a
+drive for good; its files stay on it.
 
 ## Deleting and disk space
 
