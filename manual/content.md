@@ -1,17 +1,19 @@
 # Content
 
-The **Content** tile (<https://content.deck>) brings new wiki books, maps and AI models onto
-the box from a USB stick or a disc, keeps books and maps on this device or on a big drive
+The **Content** tile (<https://content.deck>) brings new wiki books, maps, languages and AI
+models onto the box from a USB stick or a disc, keeps them on this device or on a big drive
 that stays plugged in, shows how much space is used, and removes things you no longer need.
 
 ## Importing
 
 1. Plug in the stick (or insert the disc) and open **Content**.
-2. Pick where new books and maps go: **Save new books and maps to** (this device or an
+2. Pick where new files go: **Save new books, maps and languages to** (this device or an
    added drive — the one with the most free space is chosen for you).
 3. Under *Wiki books*, choose **Import wiki files** (or **a folder** to take every `.zim` in
    it); under *Maps*, choose **Import map files** (`.pmtiles` — see
-   [Getting more maps](maps.html#getting-more-maps)); under *AI models*, choose
+   [Getting more maps](maps.html#getting-more-maps)); under *Languages*, choose **Import
+   translation models** (`.argosmodel`) or **Import dictionaries** (`.dictd.tar.xz` — see
+   [More languages](language.html#more-languages)); under *AI models*, choose
    **Import a model** (a `.gguf` file).
 4. In the file dialog, click your stick or disc in the side panel — that opens it — and
    pick the files.
@@ -37,6 +39,11 @@ a map named like a built-in one (`czechia.pmtiles`) replaces it until you delete
 PMTiles format, version 4 (what this box draws). Picture (raster) maps, maps from other
 map makers (e.g. OpenMapTiles), other versions and files cut off while copying are refused
 with the reason.
+
+**Languages are checked** too: a translation model must be an Argos Translate package for
+the languages its name says (`translate-de_en-…` really translates German → English); a
+dictionary must be a FreeDict file in *dictd* format. Like maps, a model named like a
+built-in one (English ↔ Czech) replaces it until you delete the import.
 
 ## Adding a big drive
 
@@ -78,8 +85,8 @@ drive for good; its files stay on it — books, maps and people's own [Files](fi
 ## Deleting and disk space
 
 Each imported book, map and model has a **Delete** button (it asks first); it deletes that
-one copy, wherever it is (the *Where* column). Books and maps that came with the box can't
-be deleted. *Drives* shows the free space of this device and each added drive.
+one copy, wherever it is (the *Where* column). Books, maps and languages that came with the
+box can't be deleted. *Drives* shows the free space of this device and each added drive.
 
 On boxes installed as **lite**, there is no AI models section.
 

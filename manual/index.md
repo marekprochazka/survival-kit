@@ -9,7 +9,9 @@ desktop itself logs in automatically.
 
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
 - [Maps](maps.html) — offline maps, measuring distances, getting more maps
-- [Content](content.html) — bring in wiki books, maps and AI models from a stick
+- [Language](language.html) — translate English ↔ Czech, dictionary, thesaurus
+- [Content](content.html) — bring in wiki books, maps, languages and AI models from a stick
+- [Content sticks](usb-sticks.html) — what's on the wiki and AI-model sticks; which model to pick
 - [Passwords](passwords.html) — the offline password manager
 - [Files](files.html) — your own files, and the box's books and maps to download
 - [Chat](chat.html) — ask the local AI; it looks in the wiki first (full profile)

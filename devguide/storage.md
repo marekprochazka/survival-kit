@@ -1,9 +1,9 @@
 # Storage (content on several drives)
 
 `modules/services/storage.nix` + `modules/services/content/app/{locations,library,drives}.py`
-— where the box's content lives (ADR-0006). Wiki books and maps can live on **this device**
-and on **added drives** (a big disk that stays plugged in). Services never see the drives:
-they read one merged, checked **library**.
+— where the box's content lives (ADR-0006). Wiki books, maps, translation models and
+dictionaries can live on **this device** and on **added drives** (a big disk that stays
+plugged in). Services never see the drives: they read one merged, checked **library**.
 
 ## Locations
 
@@ -12,6 +12,8 @@ Every location has the same tree:
     survival-kit.json   ← marker: {"format": 1, "name": "…"}
     wiki/               ← *.zim
     maps/               ← *.pmtiles
+    translate/          ← *.argosmodel (translation models, see [Language](language.html))
+    dict/               ← *.dictd.tar.xz (dictionaries)
     models/             ← (unused: AI models stay in Ollama's own store, see below)
     files/<account>/    ← people's own files (see [Files](files.html))
     .incoming/          ← uploads in progress

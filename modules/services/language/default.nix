@@ -42,7 +42,8 @@ let
     mkdir $out
     cp ${./app}/*.py $out/
     rm $out/test_*.py
-    cp ${../content/app/langfiles.py} ${../content/app/content.py} $out/
+    cp ${../content/app/langfiles.py} $out/langfiles.py # store paths: copy to plain names
+    cp ${../content/app/content.py} $out/content.py
     cp ${pkgs.python3Packages.argostranslate.src}/argostranslate/apply_bpe.py $out/
   '';
   static = pkgs.runCommand "language-static" { } ''

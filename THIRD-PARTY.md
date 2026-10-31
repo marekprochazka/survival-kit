@@ -20,6 +20,19 @@ On the box: the chat service's static directory (`marked.js`, `purify.js`,
 `modules/services/chat/default.nix` or `modules/services/maps/default.nix`
 (`nix store prefetch-file <url>`) and this table.
 
+## Language data and code
+
+| What | Version | Licence | Used in | Source |
+|---|---|---|---|---|
+| Argos Translate models `translate-en_cs`, `translate-cs_en` (made from Helsinki-NLP **OPUS-MT** models) | 1.9.6 | CC-BY 4.0 | Language: built-in English ↔ Czech | https://argos-net.com/v1/translate-en_cs-1_9_6.argosmodel, …/translate-cs_en-1_9_6.argosmodel |
+| Argos Translate `apply_bpe.py` (from subword-nmt, Rico Sennrich) | argostranslate 1.11.0 (nixpkgs source) | MIT | Language: BPE word splitting | https://github.com/argosopentech/argos-translate |
+| WordNet (dictd database, nixpkgs `dictdDBs.wordnet`) | 542 | WordNet 3.0 licence (Princeton, permissive) | Language: English dictionary | https://wordnet.princeton.edu/ |
+| Moby Thesaurus (Grady Ward) | Project Gutenberg #3202 | public domain | Language: thesaurus | https://www.gutenberg.org/files/3202/files/mthesaur.txt |
+
+OPUS-MT: Jörg Tiedemann and Santhosh Thottingal, "OPUS-MT — Building open translation
+services for the World", EAMT 2020; models © University of Helsinki, CC-BY 4.0. Imported
+FreeDict dictionaries carry their own licences (mostly GPL), inside each archive.
+
 ## Map data
 
 The built-in maps (`modules/services/maps/builtins.nix`) are cut from the Protomaps daily
