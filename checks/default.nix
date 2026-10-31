@@ -27,6 +27,7 @@ let
     eval-content = import ./eval-content.nix args;
     lookup-unit = import ./lookup-unit.nix args;
     chat-unit = import ./chat-unit.nix args;
+    language-unit = import ./language-unit.nix args;
     eval-chat = import ./eval-chat.nix args;
     eval-maps = import ./eval-maps.nix args;
     eval-storage = import ./eval-storage.nix args;
