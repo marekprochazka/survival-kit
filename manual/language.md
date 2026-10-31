@@ -30,7 +30,8 @@ one to look it up. With more dictionaries added, choose one above the search box
 
 Type an English word and press **Find synonyms**. The words come from the **Moby
 Thesaurus** — a long list per word, in alphabetical order (not grouped by meaning). Click a
-word to see its synonyms.
+word to see its synonyms. The thesaurus is English only and comes with the box; there is no
+way to add others.
 
 ## More languages
 
