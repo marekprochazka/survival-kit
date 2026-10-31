@@ -84,6 +84,10 @@ in
   config = lib.mkIf cfg.enable {
     services.filebrowser = {
       enable = true;
+      # sign-up: one account, one home folder (File Browser would put "a..b" and "ab" in one)
+      package = pkgs.filebrowser.overrideAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ./signup.patch ];
+      });
       settings = {
         address = "127.0.0.1"; # only nginx talks to it
         inherit port;
@@ -93,6 +97,8 @@ in
 
     # exFAT/NTFS drives have no owners: mount them writable for File Browser's group
     survivalKit.storage.filesGroup = fb.group;
+    # the binds of a drive's folders into the spaces are the box's own, not "the drive is in use"
+    systemd.services.survival-kit-drives.environment.OURS = "${viewDir}/";
 
     systemd = {
       services.filebrowser = {
@@ -133,7 +139,8 @@ in
           REGISTRY = storage.registryFile;
           DRIVE_STATE = storage.driveStateFile;
           VIEW_DIR = viewDir;
-          VIEW_STATE = "/run/survival-kit-files/view.json";
+          # kept across reboots: the next boot takes down folders of drives that are gone
+          VIEW_STATE = "/var/lib/survival-kit-files/view.json";
           BUILTIN_WIKI = lib.optionalString (kiwix.starterDir != null) "${kiwix.starterDir}";
           BUILTIN_MAPS = lib.optionalString maps.enable "${maps.builtinDir}";
           OWNER = fb.user;
@@ -144,8 +151,6 @@ in
         serviceConfig = {
           Type = "oneshot";
           ExecStart = "${pkgs.python3}/bin/python3 ${../content/app}/files_view.py";
-          RuntimeDirectory = "survival-kit-files";
-          RuntimeDirectoryPreserve = true;
         };
       };
 

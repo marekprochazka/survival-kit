@@ -1,0 +1,36 @@
+survival-kit: refuse sign-up names whose home folder would differ (two accounts, one folder),
+names starting with a dot, and a home folder that already exists. File Browser 2.63.15.
+
+--- a/http/auth.go
++++ b/http/auth.go
+@@ -193,6 +193,16 @@
+ 	user.Password = pwd
+ 	if d.settings.CreateUserDir {
+ 		user.Scope = ""
++		// survival-kit: one account, one home. Refuse a name its folder would change
++		// ("a..b" → "ab", "a b" → "a-b": two accounts in one folder) or hide, and a
++		// folder that is already there.
++		home := settings.HomeName(user.Username)
++		if home != user.Username || strings.HasPrefix(home, ".") {
++			return http.StatusBadRequest, errors.New("use only letters, digits and @ _ . - (not first: .)")
++		}
++		if _, err := os.Lstat(d.server.Root + "/" + strings.Trim(d.settings.UserHomeBasePath, "/") + "/" + home); err == nil {
++			return http.StatusConflict, fberrors.ErrExist
++		}
+ 	}
+ 
+ 	userHome, err := d.settings.MakeUserDir(user.Username, user.Scope, d.server.Root)
+--- a/settings/dir.go
++++ b/settings/dir.go
+@@ -39,6 +39,11 @@
+ 	return userScope, nil
+ }
+ 
++// HomeName is the folder name a user's home gets (survival-kit).
++func HomeName(username string) string {
++	return cleanUsername(username)
++}
++
+ func cleanUsername(s string) string {
+ 	// Remove any trailing space to avoid ending on -
+ 	s = strings.Trim(s, " ")

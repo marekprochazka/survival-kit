@@ -44,4 +44,13 @@ assert lib.assertMsg (lib.hasInfix "client_max_body_size 0"
   cfg.services.nginx.virtualHosts."files.deck".extraConfig
 ) "large uploads to Files are not cut off by nginx";
 assert lib.assertMsg lite.survivalKit.services.files.enable "Files is on in lite too";
+assert lib.assertMsg (lib.any
+  (p: baseNameOf p == "signup.patch" || lib.hasSuffix "-signup.patch" "${p}")
+  (cfg.services.filebrowser.package.patches or [ ])
+) "File Browser refuses sign-up names that would share a home folder";
+assert lib.assertMsg (lib.hasPrefix "/var/lib/survival-kit-files/" view.environment.VIEW_STATE)
+  "the view's state survives a reboot (gone drives' folders are cleaned up)";
+assert lib.assertMsg (
+  cfg.systemd.services.survival-kit-drives.environment.OURS == "${viewDir}/"
+) "Files' binds of a drive don't count as the drive being in use";
 pkgs.runCommand "eval-files" { } "touch $out"

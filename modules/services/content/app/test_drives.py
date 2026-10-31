@@ -182,6 +182,15 @@ class MountAll(unittest.TestCase):
         marker = json.loads((self.dir / "u-2" / "survival-kit" / "survival-kit.json").read_text())
         self.assertEqual(marker["name"], "Photos")
 
+    def test_mount_all_files_binds_are_not_in_use(self):
+        """Files binds a drive's folders into people's spaces; replugged as the same device
+        node before Files took them down, the drive must still mount."""
+        src = self.plug("u-1")
+        self.mounted = [(src, "/var/lib/survival-kit-files/view/users/anna/Big")]
+        state = drives.mount_all([self.drive("u-1")], self.dir, self.fake_run, lambda: list(self.mounted),
+                                 self.by_uuid, self.rules, ours=("/var/lib/survival-kit-files/",))
+        self.assertEqual(state["u-1"], {"mounted": True, "error": None})
+
     def test_mount_all_passes_files_group(self):
         src = self.plug("u-2")
         drives.mount_all([self.drive("u-2", "exfat")], self.dir, self.fake_run, list, self.by_uuid, self.rules, group=990)

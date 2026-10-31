@@ -13,6 +13,7 @@ import json
 import os
 import pwd
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -52,17 +53,26 @@ def folder_names(locs):
     return names
 
 
+def usable(loc):
+    """A location is used only when its folders are real folders. A drive is anyone's: a
+    survival-kit/, files/, wiki/ or maps/ that is a link (e.g. to /var/lib/survival-kit)
+    would make root hand that place out."""
+    return not any(os.path.islink(p) for p in (loc.root, *(loc.root / d for d in ("files", *KINDS))))
+
+
 def wanted(view, homes, locs, builtins):
     """Every mount the spaces need: {target: (source, read_only)}, absolute paths as strings.
 
     builtins: kind → the folder of the box's own files of that kind (links), or None.
     """
     names = folder_names(locs)
+    locs = [loc for loc in locs if usable(loc)]
     want = {}
     for h in homes:
         home = Path(view) / "users" / h
         for loc in locs:
-            want[str(home / names[loc.id])] = (str(loc.root / "files" / h), False)
+            if not os.path.islink(loc.root / "files" / h):
+                want[str(home / names[loc.id])] = (str(loc.root / "files" / h), False)
             for kind in KINDS:
                 want[str(home / "Library" / names[loc.id] / kind)] = (str(loc.root / kind), True)
         for kind in KINDS:
@@ -80,17 +90,20 @@ def homes(view):
     users = Path(view) / "users"
     if not users.is_dir():
         return []
-    return sorted(p.name for p in users.iterdir() if p.is_dir() and not p.name.startswith("."))
+    # File Browser owns users/: a link there must not make root work somewhere else
+    return sorted(p.name for p in users.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))
 
 
 def _set(path, mode, owner):
     """Mode and owner, each only when different: the path unit watches view/users, and a run
     that changes something there would start itself again. Errors are ignored (exFAT/NTFS have
-    no owners or modes; the mount options give them)."""
-    st = path.stat()
+    no owners or modes; the mount options give them). Links are never followed."""
+    st = path.lstat()
+    if stat.S_ISLNK(st.st_mode):
+        return
     if (st.st_uid, st.st_gid) != owner:
         try:
-            os.chown(path, *owner)
+            os.chown(path, *owner, follow_symlinks=False)
         except OSError:
             pass
     if st.st_mode & 0o7777 != mode:
@@ -105,7 +118,7 @@ def prepare(view, homes, locs, owner):
     each person's folder on every location: <loc>/files/<account>, File Browser's (owner)."""
     for h in homes:
         _set(Path(view) / "users" / h, 0o755, (0, 0))
-        for loc in locs:
+        for loc in filter(usable, locs):
             folder = loc.root / "files" / h
             try:
                 folder.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -199,12 +212,40 @@ def _same(target, source):
     return (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino)
 
 
+def settle(step, inputs, limit=5):
+    """Run step until inputs() is the same after a run as before it (at most `limit` runs).
+
+    systemd folds a path-unit trigger that comes while this oneshot runs into the run itself:
+    a sign-up or drive change during a run would otherwise wait for the next one.
+    """
+    for _ in range(limit):
+        before = inputs()
+        step()
+        if inputs() == before:
+            return
+
+
+def _inputs(env):
+    try:
+        drives = Path(env["DRIVE_STATE"]).read_text()
+    except OSError:
+        drives = None
+    return homes(Path(env["VIEW_DIR"])), drives
+
+
 def main():
     env = os.environ
+    settle(lambda: run_once(env), lambda: _inputs(env))
+
+
+def run_once(env):
     view = Path(env["VIEW_DIR"])
     locs = current_locations(env["DATA_DIR"], env["DRIVES_DIR"], env["REGISTRY"], env["DRIVE_STATE"])
     owner = pwd.getpwnam(env["OWNER"])
     accounts = homes(view)
+    for loc in locs:
+        if not usable(loc):
+            print(f"files: {loc.name}: a folder in its survival-kit/ is a link; left out", file=sys.stderr, flush=True)
     prepare(view, accounts, locs, (owner.pw_uid, owner.pw_gid))
     builtins = {"wiki": env.get("BUILTIN_WIKI") or None, "maps": env.get("BUILTIN_MAPS") or None}
     want = wanted(view, accounts, locs, builtins)

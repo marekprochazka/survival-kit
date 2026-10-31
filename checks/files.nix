@@ -72,6 +72,10 @@ pkgs.testers.runNixOSTest {
         assert code("POST", "/signup", data=account(ANNA, "anna-password-1")) == "200"
         assert code("POST", "/signup", data=account(BEN, "ben-password-12")) == "200"
         assert code("POST", "/signup", data=account("short@files.deck", "too-short")) != "200"
+        # names File Browser would change into another account's folder, or hide (patched)
+        for bad in ["anna..@files.deck", "anna b@files.deck", ".anna@files.deck"]:
+            assert code("POST", "/signup", data=account(bad, "some-password-1")) == "400", bad
+        assert code("POST", "/signup", data=account(ANNA, "some-password-1")) == "409"
         anna, ben = login(ANNA, "anna-password-1"), login(BEN, "ben-password-12")
         has(anna, "", "This device")
         has(anna, "", "Library")

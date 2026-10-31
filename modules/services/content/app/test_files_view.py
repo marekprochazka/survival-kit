@@ -67,6 +67,26 @@ class WantedTest(unittest.TestCase):
         self.assertEqual(w[str(self.home / "Library/Built-in/wiki/a.zim")], (str(store / "a.zim"), True))
         self.assertFalse([t for t in w if "Built-in/maps" in t])
 
+    def test_wanted_skips_drive_with_links(self):
+        """A drive's files/ (or wiki/, maps/, survival-kit/) pointing elsewhere must never be
+        bound: a crafted stick could otherwise hand out e.g. /var/lib/survival-kit."""
+        secret = Path(self.tmp.name) / "secret"
+        (secret / "anna@files.deck").mkdir(parents=True)
+        self.tree.mkdir(parents=True)
+        (self.tree / "files").symlink_to(secret)
+        w = self.want()
+        self.assertFalse([t for t in w if "/Big" in t], w)
+        self.assertIn(str(self.home / "This device"), w)
+
+    def test_wanted_skips_linked_personal_folder(self):
+        secret = Path(self.tmp.name) / "secret"
+        secret.mkdir()
+        (self.tree / "files").mkdir(parents=True)
+        (self.tree / "files/anna@files.deck").symlink_to(secret)
+        w = self.want()
+        self.assertNotIn(str(self.home / "Big"), w)
+        self.assertIn(str(self.home / "Library/Big/wiki"), w)
+
 
 class ReconcileTest(unittest.TestCase):
     def setUp(self):
@@ -126,6 +146,19 @@ class ReconcileTest(unittest.TestCase):
         self.assertFalse((self.home / "Big").exists())
         self.assertFalse((self.home / "Library/Big").exists())  # its empty parent too
         self.assertTrue((self.home / "Library").is_dir())
+
+    def test_reconcile_removes_leftovers_after_reboot(self):
+        """After a reboot nothing is mounted: a drive that is gone leaves no empty folder."""
+        want = self.want()
+        big = {str(self.home / "Big"): (str(self.src), False),
+               str(self.home / "Library/Big/wiki"): (str(self.src), True)}
+        for t in big:
+            Path(t).mkdir(parents=True)
+        got = self.reconcile(want, want | big, set())
+        self.assertEqual(got, want)
+        self.assertFalse([c for c in self.calls if c[0] == "umount"])
+        self.assertFalse((self.home / "Big").exists())
+        self.assertFalse((self.home / "Library/Big").exists())
 
     def test_reconcile_rebinds_stale_mount(self):
         want = self.want()
@@ -187,11 +220,50 @@ class PrepareTest(unittest.TestCase):
         files_view.prepare(self.view, ["anna"], self.locs, (0, 0))  # like exFAT: no owners
         self.assertTrue(all(f.is_dir() for f in self.folders()))
 
+    def test_prepare_does_not_follow_links(self):
+        outside = Path(self.tmp.name) / "outside"
+        (outside / "anna").mkdir(parents=True, mode=0o755)
+        tree = self.locs[1].root
+        tree.mkdir(parents=True)
+        (tree / "files").symlink_to(outside)
+        files_view.prepare(self.view, ["anna"], self.locs, self.me)
+        self.assertEqual((outside / "anna").stat().st_mode & 0o777, 0o755)  # untouched
+        self.assertTrue((self.locs[0].root / "files/anna").is_dir())
+
+    def test_homes_skips_links(self):
+        elsewhere = Path(self.tmp.name) / "elsewhere"
+        elsewhere.mkdir()
+        (self.view / "users/evil").symlink_to(elsewhere)
+        self.assertEqual(files_view.homes(self.view), ["anna"])
+
     def test_homes_lists_accounts(self):
         for name in ("anna@files.deck", "ben", ".tmp"):
             (self.view / "users" / name).mkdir(exist_ok=True)
         (self.view / "users/stray.txt").write_text("")
         self.assertEqual(files_view.homes(self.view), ["anna", "anna@files.deck", "ben"])
+
+
+class SettleTest(unittest.TestCase):
+    def test_settle_runs_again_when_inputs_changed_during_a_run(self):
+        """A sign-up or drive change during a run is folded into it by systemd: run again."""
+        state = {"inputs": 1, "runs": 0}
+
+        def step():
+            state["runs"] += 1
+            if state["runs"] == 1:
+                state["inputs"] = 2  # changed while the first run was busy
+
+        files_view.settle(step, lambda: state["inputs"])
+        self.assertEqual(state["runs"], 2)
+
+    def test_settle_gives_up_after_five_runs(self):
+        state = {"runs": 0}
+
+        def step():
+            state["runs"] += 1
+
+        files_view.settle(step, lambda: state["runs"])  # always changing
+        self.assertEqual(state["runs"], 5)
 
 
 if __name__ == "__main__":

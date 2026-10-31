@@ -29,6 +29,13 @@ with the drive. The top of a space is root's (0755): File Browser can't drop a f
 the kernel refuses it even for root, and File Browser answers **500** "read-only file
 system" (it maps only permission errors to 403).
 
+**Links on a drive are never followed by root.** A drive is anyone's: a `survival-kit/`,
+`files/`, `wiki/` or `maps/` that is a symlink (e.g. to `/var/lib/survival-kit`) would make
+the root service chown and bind that place into someone's space — such a drive is left out
+of Files (logged); a `files/<account>` link leaves out that one folder. Accounts that are
+links in `view/users` (File Browser owns that folder) are skipped, and owners/modes are set
+without following links.
+
 Folder names: drives by their name from the content manager, made safe (no `/`, not hidden,
 empty → `Drive`) and unique without regard to case (`Big`, `big (2)`); `Library`, `Built-in`
 and `This device` are taken.
@@ -45,12 +52,19 @@ whenever `survival-kit-files-view.path` sees a change in `view/users` (a sign-up
 2. makes each person's folder on every location (`files/<account>/`, 0700, File Browser's)
    and makes each space's top root's — **changing only what isn't right yet**: the path unit
    watches `view/users`, and a run that touched it again would start itself forever;
-3. compares the mounts it wants with the last run's (`/run/survival-kit-files/view.json`)
+3. compares the mounts it wants with the last run's (`/var/lib/survival-kit-files/view.json`
+   — kept across reboots, so the first run after a boot removes the empty folders of drives
+   that are gone)
    and with the kernel's (`/proc/self/mounts`): unwanted ones and **stale** ones go
    (`umount -l`, deepest first; a bind of a drive that was pulled out and plugged back
    points at the dead filesystem — device/inode differ from the source), then the missing
    ones are mounted (`mount --bind`, `-o ro` for the Library), parents first. A mount that
    fails is left out and tried again next run.
+
+A trigger that comes *while* the service runs is folded into that run by systemd, so the
+service repeats itself (up to 5 times) until the accounts and the drive state are the same
+after a run as before it. `survival-kit-drives` is told (`OURS`) that mounts under the view
+are the box's own: a drive replugged before the view took its binds down is not "in use".
 
 File Browser's own unit is confined: `ProtectSystem=strict`, writable only
 `view/` and its database folder, and `InaccessiblePaths=/var/lib/survival-kit` — it can't
@@ -69,7 +83,12 @@ unit's `preStart` sets them on every start (`filebrowser config init` the first 
 `config set` after): JSON logins, sign-up on, minimum password length 12, new accounts may
 create/rename/change/delete/download but **not** share (public links), run commands or
 administer; dotfiles hidden, command runner off, branding "Files" without external links.
-A database made with `config init` has no users — File Browser's quick setup (an admin
+**Sign-up is patched** (`signup.patch`): File Browser turns a name into its home folder name
+by dropping `..` and replacing other characters with `-`, and it would happily reuse a
+folder that exists — `anna..b` and `annab`, or `anna b` and `anna-b`, would share one space.
+The patch refuses (400) a name its folder name would change or that starts with `.`, and
+(409) a name whose folder is already there. Check it still applies when File Browser is
+updated. A database made with `config init` has no users — File Browser's quick setup (an admin
 account with a printed password) never runs. Nobody is admin; there is no user management
 page.
 

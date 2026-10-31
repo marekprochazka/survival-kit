@@ -187,11 +187,12 @@ def _error(e):
     return str(e) if isinstance(e, Refused) else (e.strerror or str(e))
 
 
-def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl="systemctl", group=None):
+def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl="systemctl", group=None, ours=()):
     """Mount every recorded drive at drives_dir/<uuid>; unmount the forgotten ones.
 
     run(args) runs a command (raises CalledProcessError); mounts() → [(source, target)];
-    group: see mount_args.
+    group: see mount_args. ours: folders whose mounts of a drive are the box's own (Files'
+    binds of a drive's folders), not someone else using it.
     Returns {uuid: {"mounted": usable now, "error": why not}} — one drive's trouble never
     stops the others.
     """
@@ -215,7 +216,7 @@ def mount_all(recorded, drives_dir, run, mounts, by_uuid, rules_file, systemctl=
             if here and here[-1] != source:  # back as another device: the old mount is dead
                 _try(run, ["umount", "-l", str(target)])
                 here = []
-            where = [t for s, t in current if s == source and t != str(target)]
+            where = [t for s, t in current if s == source and t != str(target) and not t.startswith(tuple(ours))]
             if not here:
                 for t in where:
                     if not t.startswith(DESKTOP):
@@ -272,6 +273,7 @@ def main():
         "/run/udev/rules.d/90-survival-kit-drives.rules",
         systemctl,
         files_group(env.get("FILES_GROUP")),
+        tuple(env["OURS"].split()) if env.get("OURS") else (),
     )
     out = Path(env["DRIVE_STATE"])
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -6,9 +6,9 @@ works without internet.
 
 **First use.** Open Files and choose **Sign up**. As the name, use your name followed by
 `@files.deck`, e.g. **`anna@files.deck`** (the box's convention for logins — see
-[What's on this box](whats-on-this-box.html)). The password needs at least 12 characters.
-Everyone at this box can make their own account; your files are yours — others can't see
-them.
+[What's on this box](whats-on-this-box.html)). Use only letters, digits and `@ _ . -` in
+the name (not a `.` first, no `..`). The password needs at least 12 characters. Everyone
+at this box can make their own account; your files are yours — others can't see them.
 
 **Your folders.** After logging in you see:
 
