@@ -40,28 +40,29 @@ with the reason.
 
 ## Adding a big drive
 
-A small notebook can keep its big books and maps on a drive that stays plugged in.
+A small notebook can keep its big books and maps on a second drive that stays connected:
+one built into the computer or a USB drive.
 
-1. Plug the drive in and open **Content**. Under *Drives*, the drive is listed under
-   **Drives you can add**.
-2. Click **Add** and give it a name. The box **never formats** a drive: it creates a
-   `survival-kit` folder on it (or uses the one already there) and leaves everything else
-   alone.
-3. From now on the drive is used at every start, and you can save imports to it.
+1. **Connect the drive** and start the box.
+2. **Is it brand-new, or never used for files?** Then it has to be formatted once,
+   in a terminal. Formatting **erases everything on the drive**, so make sure you pick the
+   right one:
+   1. Open a terminal and run `lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS`. Find the new drive
+      by its size, e.g. `sdb  1.8T` (on some computers a name like `nvme1n1`). The drive
+      the box runs from has `/` among its mount points, so never pick that one.
+   2. Format it (`sdb` is the name from the step before):
+      - `sudo mkfs.exfat -L BIG /dev/sdb` if you also want to use the drive on Windows or
+        Mac;
+      - `sudo mkfs.ext4 -L BIG /dev/sdb` if it stays with this box.
 
-Drives in **FAT32** format can't be added (they can't hold files over 4 GB) — use exFAT,
-NTFS or ext4. Encrypted drives aren't supported yet.
-
-**A brand-new, empty drive?** If the drive isn't listed (it has no format yet), format it
-once in a terminal. This erases the drive, so check twice that you have the right one:
-
-1. Run `lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS` and find the drive by its size, e.g.
-   `sdb  1.8T`. The disk the box runs from has mount points like `/` and `/boot`, so
-   never pick that one.
-2. Format it:
-   - `sudo mkfs.exfat -L BIG /dev/sdb` if you also want to use the drive on Windows or Mac;
-   - `sudo mkfs.ext4 -L BIG /dev/sdb` if it stays with this box.
-3. Open **Content**. The drive is now under **Drives you can add**: click **Add**.
+   A drive that already has files on it in exFAT, NTFS or ext4 format skips this step.
+   Drives in **FAT32** format can't be added (they can't hold files over 4 GB), so format
+   them as above if their files can go. Encrypted drives aren't supported yet.
+3. Open **Content**. Under *Drives*, the drive is listed under **Drives you can add**.
+   Click **Add** and give it a name. The box itself **never formats** a drive: it creates
+   a `survival-kit` folder on it (or uses the one already there) and leaves everything
+   else alone.
+4. From now on the drive is used at every start, and you can save imports to it.
 
 **A drive with content already on it** — e.g. from another survival-kit box — is used as it
 is: its books and maps appear right away. Each file is checked like an import; files the

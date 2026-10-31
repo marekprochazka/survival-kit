@@ -92,7 +92,9 @@ Files on, `gid=filebrowser,dmask=002,fmask=113` — File Browser writes too (peo
 FAT32 (4 GB file limit) and encrypted drives (LUKS, BitLocker) are listed with the reason
 and can't be added. Offered at all: filesystems on disks the system doesn't use — a disk
 with anything mounted outside `/run/media/` and `drives/` (the system disk, swap) is never
-offered, free partitions included. `lsblk --json` is the source.
+offered, free partitions included. `lsblk --json` is the source. A disk with no filesystem
+isn't offered: the box never formats (ADR-0006); the manual (*Content → Adding a big
+drive*) walks people through `mkfs` in a terminal.
 
 A drive pulled out while running: the udev rule re-runs the mounting, which clears the dead
 mount and rebuilds the library — its books and maps disappear within seconds, the rest keeps
@@ -116,11 +118,3 @@ fake command runner) and the location parts of `test_content.py`/`test_server.py
 to a drive, used in place, auto-resolve (drive and this device), hidden from udisks, reboot
 with a listed drive missing, a real unplug (the disk removed from the PCI bus) and plug back,
 forget.
-
-**By hand in VirtualBox:** with the VM powered off, open *Settings → Storage*, add a new
-disk to the SATA controller (*Create*, VDI, e.g. 2 GB) and tick **Hot-pluggable** on it.
-Start the box and run `lsblk` (the new disk is `sdb`). Format it with
-`sudo mkfs.exfat -L BIG /dev/sdb` or `mkfs.ext4`, then add it in Content. The box never
-formats a drive itself (ADR-0006), so this step stays manual. To test a pull-out, remove
-the disk in *Settings → Storage* while the VM runs (allowed because it is hot-pluggable),
-or use the PCI remove that the VM test uses.
