@@ -52,6 +52,17 @@ A small notebook can keep its big books and maps on a drive that stays plugged i
 Drives in **FAT32** format can't be added (they can't hold files over 4 GB) — use exFAT,
 NTFS or ext4. Encrypted drives aren't supported yet.
 
+**A brand-new, empty drive?** If the drive isn't listed (it has no format yet), format it
+once in a terminal. This erases the drive, so check twice that you have the right one:
+
+1. Run `lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS` and find the drive by its size, e.g.
+   `sdb  1.8T`. The disk the box runs from has mount points like `/` and `/boot`, so
+   never pick that one.
+2. Format it:
+   - `sudo mkfs.exfat -L BIG /dev/sdb` if you also want to use the drive on Windows or Mac;
+   - `sudo mkfs.ext4 -L BIG /dev/sdb` if it stays with this box.
+3. Open **Content**. The drive is now under **Drives you can add**: click **Add**.
+
 **A drive with content already on it** — e.g. from another survival-kit box — is used as it
 is: its books and maps appear right away. Each file is checked like an import; files the
 box can't use are marked *invalid*, and if this box already has the same book or map, the

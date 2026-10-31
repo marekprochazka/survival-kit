@@ -116,3 +116,11 @@ fake command runner) and the location parts of `test_content.py`/`test_server.py
 to a drive, used in place, auto-resolve (drive and this device), hidden from udisks, reboot
 with a listed drive missing, a real unplug (the disk removed from the PCI bus) and plug back,
 forget.
+
+**By hand in VirtualBox:** with the VM powered off, open *Settings → Storage*, add a new
+disk to the SATA controller (*Create*, VDI, e.g. 2 GB) and tick **Hot-pluggable** on it.
+Start the box and run `lsblk` (the new disk is `sdb`). Format it with
+`sudo mkfs.exfat -L BIG /dev/sdb` or `mkfs.ext4`, then add it in Content. The box never
+formats a drive itself (ADR-0006), so this step stays manual. To test a pull-out, remove
+the disk in *Settings → Storage* while the VM runs (allowed because it is hot-pluggable),
+or use the PCI remove that the VM test uses.
