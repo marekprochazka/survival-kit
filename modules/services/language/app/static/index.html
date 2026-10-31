@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Language</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    main { max-width: 60rem; margin: 0 auto; }
+    [role="tablist"] { display: flex; gap: .3rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+    [role="tab"] { font: inherit; padding: .5rem 1rem; border: 1px solid transparent; border-bottom: 0;
+      border-radius: 6px 6px 0 0; background: none; color: var(--muted); cursor: pointer; }
+    [role="tab"][aria-selected="true"] { background: var(--card); border-color: var(--border); color: var(--fg);
+      margin-bottom: -1px; }
+    .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin-bottom: .6rem; }
+    .boxes { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+    textarea { font: inherit; padding: .5rem; min-height: 12rem; resize: vertical; width: 100%; box-sizing: border-box;
+      background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; }
+    select, input[type="search"], button { font: inherit; padding: .3rem .6rem; }
+    input[type="search"] { flex: 1; min-width: 12rem; }
+    .entry { white-space: pre-wrap; background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+      padding: .6rem .8rem; margin: 0 0 .7rem; overflow-wrap: anywhere; }
+    .words { line-height: 1.9; }
+    .words button { border: 1px solid var(--border); background: var(--card); color: var(--accent);
+      border-radius: 999px; padding: .1rem .6rem; margin: 0 .2rem .2rem 0; cursor: pointer; }
+    .muted { color: var(--muted); }
+    .error { color: var(--down); }
+    @media (max-width: 42rem) { .boxes { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header><h1>Language</h1><p>Translate, look up words and synonyms — all on this box.</p></header>
+  <main>
+    <div role="tablist" aria-label="Language tools">
+      <button role="tab" id="tab-translate" aria-controls="translate" aria-selected="true">Translate</button>
+      <button role="tab" id="tab-dictionary" aria-controls="dictionary" aria-selected="false" tabindex="-1">Dictionary</button>
+      <button role="tab" id="tab-thesaurus" aria-controls="thesaurus" aria-selected="false" tabindex="-1">Thesaurus</button>
+    </div>
+
+    <section role="tabpanel" id="translate" aria-labelledby="tab-translate">
+      <div class="row">
+        <label>From <select id="from"></select></label>
+        <button id="swap" type="button" title="Swap languages" aria-label="Swap languages">⇄</button>
+        <label>To <select id="to"></select></label>
+      </div>
+      <div class="boxes">
+        <textarea id="source" aria-label="Text to translate" placeholder="Type or paste text (Ctrl+Enter translates)"></textarea>
+        <textarea id="result" aria-label="Translation" readonly></textarea>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <button id="go" type="button">Translate</button>
+        <button id="copy" type="button">Copy</button>
+        <span id="state" class="muted" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section role="tabpanel" id="dictionary" aria-labelledby="tab-dictionary" hidden>
+      <form class="row" id="define-form">
+        <label id="dict-label" hidden>Dictionary <select id="dict"></select></label>
+        <input type="search" id="define-word" aria-label="Word to look up" placeholder="A word">
+        <button>Look up</button>
+      </form>
+      <div id="define-out" aria-live="polite"></div>
+    </section>
+
+    <section role="tabpanel" id="thesaurus" aria-labelledby="tab-thesaurus" hidden>
+      <form class="row" id="syn-form">
+        <input type="search" id="syn-word" aria-label="Word to find synonyms for" placeholder="An English word">
+        <button>Find synonyms</button>
+      </form>
+      <div id="syn-out" aria-live="polite"></div>
+    </section>
+  </main>
+  <script src="language.js"></script>
+</body>
+</html>

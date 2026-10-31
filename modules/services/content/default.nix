@@ -1,6 +1,7 @@
-# Content manager (ADR-0004) at https://content.<domain>: import wiki books, maps and AI
-# models through the browser's file dialog, see disk use, delete. A small Python program (stdlib
-# only, ./app) behind nginx; file-based with system rights — it never logs into a service.
+# Content manager (ADR-0004) at https://content.<domain>: import wiki books, maps, languages
+# (translation models, dictionaries) and AI models through the browser's file dialog, see disk
+# use, delete. A small Python program (stdlib only, ./app) behind nginx; file-based with system
+# rights — it never logs into a service.
 {
   config,
   lib,
@@ -16,6 +17,7 @@ let
   stateDir = "/var/lib/survival-kit/content";
   ollama = config.services.ollama.enable;
   maps = config.survivalKit.services.maps;
+  language = config.survivalKit.services.language;
   # the page + the dashboard's look
   static = pkgs.runCommand "content-static" { } ''
     mkdir $out
@@ -57,6 +59,9 @@ in
         MAPS = if maps.enable then "1" else "0";
         MAP_BUILTINS_DIR = lib.optionalString maps.enable "${maps.builtinDir}";
         MAP_SCHEME = "4"; # Protomaps basemap version the bundled map style draws
+        LANGUAGE = if language.enable then "1" else "0";
+        TRANSLATE_BUILTINS_DIR = lib.optionalString language.enable "${language.builtinDir}/translate";
+        DICT_BUILTINS_DIR = lib.optionalString language.enable "${language.builtinDir}/dict";
         PYTHONUNBUFFERED = "1";
         # the ollama CLI panics without a $HOME (it derives ~/.ollama even as a client)
         HOME = stateDir;
