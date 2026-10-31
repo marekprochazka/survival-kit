@@ -1,7 +1,8 @@
 """The library — one merged, checked view of the content on all locations (ADR-0006).
 
-Services don't know about locations: they read /var/lib/survival-kit/library/{wiki,maps},
-a folder of symlinks to the copy in use of every book and map. Files already on a
+Services don't know about locations: they read /var/lib/survival-kit/library/<kind>,
+a folder of symlinks to the copy in use of every book, map, translation model and
+dictionary (kinds: wiki, maps, translate, dict). Files already on a
 location get the same checks as uploads; a failing one is "invalid", the older copy of a
 name on two locations is a "duplicate" — both stay where they are, not in use, until
 auto-resolve (set_aside) moves them out of the tree. Standard library only.
@@ -24,6 +25,7 @@ from content import Refused
 from locations import Location, ensure_tree, scan
 
 DEVICE_NAME = "This device"
+KINDS_ALL = ("wiki", "maps", "translate", "dict")
 
 
 # --- what is in use -------------------------------------------------------------------
@@ -87,8 +89,10 @@ def kiwix_book(path):
 
 
 def real_check(scheme):
-    """check(path, kind) with the upload checks: Kiwix for books, pmtiles.check for maps."""
-    import pmtiles  # noqa: PLC0415 — only the real run needs it
+    """check(path, kind) with the upload checks: Kiwix for books, pmtiles.check for maps,
+    langfiles for translation models and dictionaries."""
+    import langfiles  # noqa: PLC0415 — only the real run needs them
+    import pmtiles  # noqa: PLC0415
 
     def check(path, kind):
         if kind == "wiki":
@@ -97,10 +101,15 @@ def real_check(scheme):
                 return {"ok": False, "reason": "not a readable wiki book", "date": None}
             return {"ok": True, "reason": None, "date": book.get("date") or None}
         try:
-            pmtiles.check(path, scheme)
+            if kind == "maps":
+                pmtiles.check(path, scheme)
+            elif kind == "translate":
+                langfiles.validate_model(path, langfiles.translate_name(path.name))
+            else:
+                langfiles.check_dict(path)
         except Refused as e:
             return {"ok": False, "reason": str(e), "date": None}
-        mtime = time.gmtime(path.stat().st_mtime)  # PMTiles has no standard date
+        mtime = time.gmtime(path.stat().st_mtime)  # no standard date in these formats
         return {"ok": True, "reason": None, "date": time.strftime("%Y-%m-%dT%H:%M:%S", mtime)}
 
     return check
@@ -286,7 +295,7 @@ def main():
     locs = current_locations(env["DATA_DIR"], env["DRIVES_DIR"], env["REGISTRY"], env["DRIVE_STATE"])
     check = CheckCache(env["CACHE_FILE"], real_check(int(env.get("MAP_SCHEME", "4"))))
     protected = set(env.get("PROTECTED", "").split())
-    entries = {kind: resolve(locs, kind, check, protected) for kind in ("wiki", "maps")}
+    entries = {kind: resolve(locs, kind, check, protected) for kind in KINDS_ALL}
     build_index(entries, env["LIBRARY_DIR"])
     check.save()
     write_state(entries, env["STATE_FILE"])

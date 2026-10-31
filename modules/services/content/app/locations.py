@@ -11,13 +11,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import content
+import langfiles
 from content import Refused
 
 FORMAT = 1  # the tree's layout version, written into the marker
 MARKER = "survival-kit.json"
-DIRS = ("wiki", "maps", "models", ".incoming")
+DIRS = ("wiki", "maps", "models", "translate", "dict", ".incoming")
 # kind → (file extension, the clean name a file is known by)
-KINDS = {"wiki": (".zim", content.wiki_name_plain), "maps": (".pmtiles", content.map_name)}
+KINDS = {
+    "wiki": (".zim", content.wiki_name_plain),
+    "maps": (".pmtiles", content.map_name),
+    "translate": (langfiles.MODEL_EXT, langfiles.translate_name),  # Language: translation models
+    "dict": (langfiles.DICT_EXT, langfiles.dict_name),  # Language: dictionaries
+}
 
 
 @dataclass(frozen=True)

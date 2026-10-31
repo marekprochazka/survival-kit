@@ -9,6 +9,7 @@ from pathlib import Path
 import library
 import locations
 from locations import Location
+from test_langfiles import make_dict, make_model
 
 PROTECTED = {"survival-kit", "survival-kit-dev"}
 
@@ -249,3 +250,31 @@ class Current(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LanguageKinds(Base):
+    def test_real_check_language_kinds(self):
+        check = library.real_check(4)
+        good = make_model(self.device.root / "translate" / "en_cs.argosmodel", "en", "cs")
+        r = check(good, "translate")
+        self.assertTrue(r["ok"], r)
+        self.assertRegex(r["date"], r"^\d{4}-\d\d-\d\dT")
+        wrong = make_model(self.device.root / "translate" / "de_en.argosmodel", "en", "cs")
+        self.assertFalse(check(wrong, "translate")["ok"])  # the name says another pair
+        broken = self.put(self.device, "translate", "fr_en.argosmodel", b"nope")
+        r = check(broken, "translate")
+        self.assertFalse(r["ok"])
+        self.assertIn("not an Argos translation model", r["reason"])
+        d = make_dict(self.device.root / "dict" / "eng-ces.dictd.tar.xz", {"house": "dum"})
+        self.assertTrue(check(d, "dict")["ok"])
+        self.assertFalse(check(self.put(self.device, "dict", "x.dictd.tar.xz", b"nope"), "dict")["ok"])
+
+    def test_index_has_language_kinds(self):
+        self.put(self.drive, "translate", "en_cs.argosmodel")
+        self.put(self.device, "dict", "eng-ces.dictd.tar.xz")
+        lib = self.tmp / "library"
+        entries = {k: library.resolve([self.device, self.drive], k, fake_check({}), PROTECTED)
+                   for k in library.KINDS_ALL}
+        library.build_index(entries, lib)
+        self.assertEqual(os.listdir(lib / "translate"), ["en_cs.argosmodel"])
+        self.assertEqual(os.listdir(lib / "dict"), ["eng-ces.dictd.tar.xz"])

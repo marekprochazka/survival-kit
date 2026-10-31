@@ -23,6 +23,11 @@ class Tree(unittest.TestCase):
             self.assertTrue((self.root / d).is_dir(), d)
         self.assertEqual(self.marker(), {"format": 1, "name": "Big"})
 
+    def test_ensure_tree_creates_language_dirs(self):
+        locations.ensure_tree(self.root, "Big")
+        for d in ["translate", "dict"]:
+            self.assertTrue((self.root / d).is_dir(), d)
+
     def test_ensure_tree_keeps_existing_marker(self):
         self.root.mkdir()
         (self.root / "survival-kit.json").write_text('{"format": 1, "name": "Old"}')
@@ -67,6 +72,13 @@ class Scan(unittest.TestCase):
 
     def put(self, kind, name, data=b"x"):
         (self.root / kind / name).write_bytes(data)
+
+    def test_scan_translate_and_dict(self):
+        self.put("translate", "translate-en_cs-1_9_6.argosmodel")
+        self.put("dict", "freedict-eng-ces-0.1.3.dictd.tar.xz")
+        self.put("dict", "notes.txt")
+        self.assertEqual([f["name"] for f in locations.scan(self.loc, "translate")], ["en_cs.argosmodel"])
+        self.assertEqual([f["name"] for f in locations.scan(self.loc, "dict")], ["eng-ces.dictd.tar.xz"])
 
     def test_scan_cleans_names_ignores_others(self):
         self.put("wiki", "wikipedia_en_all_2024-01.zim")
