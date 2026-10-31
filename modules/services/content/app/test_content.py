@@ -39,7 +39,7 @@ class Box:
 
     def rebuild(self):
         locs = self.places.all()
-        entries = {k: library.resolve(locs, k, self.check, PROTECTED) for k in ("wiki", "maps")}
+        entries = {k: library.resolve(locs, k, self.check, PROTECTED) for k in library.KINDS_ALL}
         library.write_state(entries, self.places.state_file)
 
     def add_drive(self, uuid, name="Drive", mounted=True):

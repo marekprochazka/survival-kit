@@ -9,12 +9,14 @@ Content lives on locations: "device" (this device) and added drives (by filesyst
 API
   GET    /health                                  "ok"
   GET    /api/status                              disk, locations, drives, wiki, builtins,
-                                                  maps, map_builtins, models (null on lite)
+                                                  maps, map_builtins, models (null on lite),
+                                                  translate, translate_builtins, dict, dict_builtins
   GET    /api/check?kind=&file=&size=[&to=][&model=]  stored name + whether it exists;
                                                   space check on location `to` (default device)
   PUT    /api/upload?kind=&file=[&to=][&model=]   body = the file (Content-Length required);
-                                                  kind = wiki | map | model (models: device)
-  DELETE /api/wiki/<name>[?at=&file=], /api/maps/<name>[?at=&file=], /api/models/<name>
+                                                  kind = wiki | map | translate | dict | model
+                                                  (models: device)
+  DELETE /api/<wiki|maps|translate|dict>/<name>[?at=&file=], /api/models/<name>
                                                   one copy: on location `at`, else the one in use
   POST   /api/resolve?at=                         move that location's invalid and duplicate
                                                   files out of the tree (set aside, not deleted)
@@ -38,6 +40,7 @@ from typing import Callable
 
 import content
 import drives as drv
+import langfiles
 import library
 import pmtiles
 from content import Refused
@@ -46,6 +49,13 @@ STATIC = {"/": "index.html", "/content.js": "content.js", "/style.css": "style.c
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css"}
 NO_MODELS = "no AI models on this box (lite profile)"
 NO_MAPS = "no maps on this box"
+NO_LANGUAGE = "no Language service on this box"
+# upload kind → (folder kind, the name a file is stored under, message when there is no such shelf)
+UPLOADS = {
+    "map": ("maps", content.map_name, NO_MAPS),
+    "translate": ("translate", langfiles.translate_name, NO_LANGUAGE),
+    "dict": ("dict", langfiles.dict_name, NO_LANGUAGE),
+}
 MODELS_DOWN = "not available right now"
 MAX_DRIVE_NAME = 60
 
@@ -87,7 +97,7 @@ def _status(item):
 def _drives(s, e):
     """The Drives section: where content lives, added drives, drives that could be added."""
     locs = {loc["id"]: loc for loc in s["locations"]}
-    items = s["wiki"] + (s["maps"] or [])
+    items = s["wiki"] + (s["maps"] or []) + (s["translate"] or []) + (s["dict"] or [])
     trouble = {}
     for i in items:
         if i["status"] != "in_use":
@@ -100,7 +110,7 @@ def _drives(s, e):
     out = [
         '<section id="drives"><h2>Drives</h2>',
         *([f'<p class="error">{e(s["drives"]["error"])}</p>'] if s["drives"].get("error") else []),
-        "<p>Books and maps can live on this device and on drives that stay plugged in. "
+        "<p>Books, maps and languages can live on this device and on drives that stay plugged in. "
         "Files the box can't use, and older copies of a book or map it has elsewhere, are marked "
         "&ldquo;not in use&rdquo;; <em>Auto-resolve</em> moves them out of the way (nothing is deleted).</p>",
         "<table><tr><th>Where</th><th>Space</th><th>State</th><th></th></tr>",
@@ -144,7 +154,7 @@ def _drives(s, e):
         f'<option value="{e(loc["id"])}"{" selected" if n == 0 else ""}>{e(loc["name"])} ({_size(loc["free"])} free)</option>'
         for n, loc in enumerate(ready)
     ]
-    out.append(f'<p><label>Save new books and maps to <select id="save-to">{"".join(opts)}</select></label></p></section>')
+    out.append(f'<p><label>Save new books, maps and languages to <select id="save-to">{"".join(opts)}</select></label></p></section>')
     return out
 
 
@@ -188,6 +198,19 @@ def render(template, s):
         out.append(
             '<p><label>Import map files <input type="file" data-import="map" accept=".pmtiles" multiple></label></p></section>'
         )
+    if s["translate"] is not None:
+        out.append('<section id="languages"><h2>Languages</h2>')
+        out.append("<h3>Translation models</h3>")
+        out += _items(s, "translate", s["translate"], s["translate_builtins"], len(langfiles.MODEL_EXT), e)
+        out.append(
+            '<p><label>Import translation models <input type="file" data-import="translate" accept=".argosmodel" multiple>'
+            "</label></p>"
+        )
+        out.append("<h3>Dictionaries</h3>")
+        out += _items(s, "dict", s["dict"], s["dict_builtins"], len(langfiles.DICT_EXT), e)
+        out.append(
+            '<p><label>Import dictionaries <input type="file" data-import="dict" accept=".xz" multiple></label></p></section>'
+        )
     if s["models"] is not None:
         d = s["disk"]
         out.append('<section id="models"><h2>AI models</h2>')
@@ -209,9 +232,14 @@ def render(template, s):
     return template.replace("<!--CONTENT-->", "\n".join(out))
 
 
-def make_server(config, wiki, models, places, maps=None, drives=None):
-    """places: library.Places. models / maps / drives: None when the box has no AI models
-    (lite) / no maps service / no drive support (tests)."""
+def make_server(config, wiki, models, places, maps=None, drives=None, translate=None, dicts=None):
+    """places: library.Places. models / maps / drives / translate + dicts: None when the box
+    has no AI models (lite) / no maps service / no drive support (tests) / no Language service."""
+
+    shelves = {"wiki": wiki, "maps": maps, "translate": translate, "dict": dicts}  # by folder
+
+    def languages_used(at):
+        return sum(x.used(at) for x in (translate, dicts) if x)
 
     lock = threading.Lock()  # one drive action / auto-resolve at a time (drives.json, renames)
 
@@ -232,13 +260,15 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
             except OSError:  # a drive going away right now: left out, the page still works
                 continue
             locs.append({"id": loc.id, "name": loc.name, "total": t, "free": f,
-                         "wiki": wiki.used(loc.id), "maps": maps.used(loc.id) if maps else 0})
+                         "wiki": wiki.used(loc.id), "maps": maps.used(loc.id) if maps else 0,
+                         "languages": languages_used(loc.id)})
         return {
             "disk": {
                 "total": total,
                 "free": free,
                 "wiki": wiki.used("device"),
                 "maps": maps.used("device") if maps else 0,
+                "languages": languages_used("device"),
                 "models": sum(m["size"] for m in model_items or []),
             },
             "locations": locs,
@@ -247,6 +277,10 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
             "builtins": wiki.builtin_items(),
             "maps": maps.items() if maps else None,
             "map_builtins": maps.builtin_items() if maps else [],
+            "translate": translate.items() if translate else None,
+            "translate_builtins": translate.builtin_items() if translate else [],
+            "dict": dicts.items() if dicts else None,
+            "dict_builtins": dicts.builtin_items() if dicts else [],
             "models": model_items,
             "models_error": models_error,
         }
@@ -267,11 +301,15 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
     def target(q):
         """(store, stored name, space factor, incoming dir, location or None) for a request."""
         kind, file = q.get("kind", ""), q.get("file", "")
-        if kind in ("wiki", "map"):
-            store = wiki if kind == "wiki" else maps
-            if store is None:
-                raise Refused(NO_MAPS)
-            name = content.wiki_name(file, wiki.protected) if kind == "wiki" else content.map_name(file)
+        if kind == "wiki" or kind in UPLOADS:
+            if kind == "wiki":
+                store, name = wiki, content.wiki_name(file, wiki.protected)
+            else:
+                folder, clean, missing = UPLOADS[kind]
+                store = shelves[folder]
+                if store is None:
+                    raise Refused(missing)
+                name = clean(file)
             loc = places.get(q.get("to") or "device")
             return store, name, 1, loc.root / ".incoming", loc
         if kind == "model":
@@ -371,12 +409,10 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
             def delete():
                 kind, _, name = path.removeprefix("/api/").partition("/")
                 name = urllib.parse.unquote(name)
-                if kind == "wiki":
-                    wiki.delete(name, q.get("at"), q.get("file"))
-                elif kind == "maps":
-                    if maps is None:
-                        raise Refused(NO_MAPS)
-                    maps.delete(name, q.get("at"), q.get("file"))
+                if kind in shelves:
+                    if shelves[kind] is None:
+                        raise Refused(NO_MAPS if kind == "maps" else NO_LANGUAGE)
+                    shelves[kind].delete(name, q.get("at"), q.get("file"))
                 elif kind == "models":
                     if models is None:
                         raise Refused(NO_MODELS)
@@ -392,7 +428,7 @@ def make_server(config, wiki, models, places, maps=None, drives=None):
 
             def resolve():
                 loc = places.get(q.get("at", ""))
-                entries = places.entries("wiki") + (places.entries("maps") if maps else [])
+                entries = [e for kind, shelf in shelves.items() if shelf for e in places.entries(kind)]
                 moved = library.set_aside(loc, entries, time.strftime("%Y-%m-%d"), places.setaside_root(loc))
                 wiki.refresh()
                 self.send(200, {"moved": moved})
@@ -460,6 +496,16 @@ def wiki_check(path):
     """The wiki shelf's validate: Refused unless Kiwix can read the book."""
     if library.kiwix_book(path) is None:
         raise Refused("not a readable wiki book")
+
+
+def model_check(path, name):
+    """A translation model upload: an Argos package of the pair its name says."""
+    langfiles.validate_model(path, name)
+
+
+def dict_check(path):
+    """A dictionary upload: a dictd archive."""
+    langfiles.check_dict(path)
 
 
 def library_refresh():
@@ -567,6 +613,27 @@ def main():
             refresh=kiwix_refresh,  # the library links maps too; the page reloads it
             noun="map",
         )
+    translate = dicts = None
+    if env.get("LANGUAGE") == "1":
+        translate = content.Shelf(
+            places,
+            "translate",
+            builtins=sizes("TRANSLATE_BUILTINS_DIR", langfiles.MODEL_EXT),
+            protected=set(),
+            validate=model_check,
+            refresh=library_refresh,  # the Language service follows the library by itself
+            noun="translation model",
+            named=True,
+        )
+        dicts = content.Shelf(
+            places,
+            "dict",
+            builtins=sizes("DICT_BUILTINS_DIR", langfiles.DICT_EXT),
+            protected=set(),
+            validate=dict_check,
+            refresh=library_refresh,
+            noun="dictionary",
+        )
     models = content.Models(Ollama(config.model_incoming)) if env.get("OLLAMA") == "1" else None
     drives = Drives(
         registry=drv.Registry(env["REGISTRY"]),
@@ -575,7 +642,7 @@ def main():
         apply=drives_apply,
     )
 
-    httpd = make_server(config, wiki, models, places, maps, drives)
+    httpd = make_server(config, wiki, models, places, maps, drives, translate, dicts)
     print(f"content manager on 127.0.0.1:{config.port}", flush=True)
     httpd.serve_forever()
 

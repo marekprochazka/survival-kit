@@ -23,9 +23,10 @@ async function api(method, url) {
 }
 
 // "book.zim" → "book", "czechia.pmtiles" → "czechia"
-const title = (name) => name.replace(/\.(zim|pmtiles)$/, "");
+const title = (name) => name.replace(/\.(zim|pmtiles|argosmodel|dictd\.tar\.xz)$/, "");
+const NOUNS = { map: "map", translate: "translation model", dict: "dictionary" };
 
-// the chosen place for books and maps (models always go to this device)
+// the chosen place for books, maps and languages (models always go to this device)
 const where = () => saveTo.options[saveTo.selectedIndex].textContent.replace(/ \(.*\)$/, "");
 
 // one file: ask the box first (name, clash, space), confirm a replacement, then upload
@@ -34,7 +35,7 @@ async function importOne(kind, file, model) {
   if (model) q.set("model", model);
   if (kind !== "model") q.set("to", saveTo.value);
   const check = await api("GET", "/api/check?" + q);
-  const noun = kind === "map" ? "map" : "book";
+  const noun = NOUNS[kind] || "book";
   if (check.exists === "import" && !confirm(
     `"${title(check.name)}" is already on this box. Replace it with this file` +
     (kind === "model" ? "?" : ` (saved to ${where()})?`))) {

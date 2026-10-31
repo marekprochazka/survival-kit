@@ -10,11 +10,13 @@ from pathlib import Path
 
 import content
 import drives as drv
+import langfiles
 import locations
 import pmtiles
 import pmtiles_fixture
 import server
 from test_content import PROTECTED, Box, FakeOllama
+from test_langfiles import make_dict, make_model
 
 GB = 1000**3
 
@@ -37,9 +39,20 @@ class Sizes(unittest.TestCase):
         self.assertEqual(server._size(2_019_000_000), "2.0 GB")
 
 
+def model_bytes(from_code="en", to_code="de"):
+    with tempfile.TemporaryDirectory() as d:
+        return make_model(Path(d) / "m.argosmodel", from_code, to_code).read_bytes()
+
+
+def dict_bytes(entries=None):
+    with tempfile.TemporaryDirectory() as d:
+        return make_dict(Path(d) / "d.dictd.tar.xz", entries or {"house": "dum"}).read_bytes()
+
+
 class Api(unittest.TestCase):
     models_enabled = True
     maps_enabled = True
+    language_enabled = True
 
     def setUp(self):
         self.box = Box(usage=usage)
@@ -75,6 +88,27 @@ class Api(unittest.TestCase):
             if self.maps_enabled
             else None
         )
+        translate = dicts = None
+        if self.language_enabled:
+            translate = content.Shelf(
+                self.box.places,
+                "translate",
+                builtins={"en_cs.argosmodel": 70, "cs_en.argosmodel": 71},
+                protected=set(),
+                validate=server.model_check,
+                refresh=self.box.rebuild,
+                noun="translation model",
+                named=True,
+            )
+            dicts = content.Shelf(
+                self.box.places,
+                "dict",
+                builtins={"wordnet.dictd.tar.xz": 30},
+                protected=set(),
+                validate=server.dict_check,
+                refresh=self.box.rebuild,
+                noun="dictionary",
+            )
         self.ollama = FakeOllama()
         models = content.Models(self.ollama) if self.models_enabled else None
         config = server.Config(port=0, static_dir=static, model_incoming=root / "state" / "incoming")
@@ -87,7 +121,7 @@ class Api(unittest.TestCase):
             state=lambda: json.loads(self.box.drive_state.read_text()) if self.box.drive_state.exists() else {},
             apply=self.mount_service,
         )
-        self.httpd = server.make_server(config, self.wiki, models, self.box.places, maps, self.drives)
+        self.httpd = server.make_server(config, self.wiki, models, self.box.places, maps, self.drives, translate, dicts)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
 
@@ -147,13 +181,61 @@ class Api(unittest.TestCase):
         self.assertEqual(s["disk"]["free"], 50 * GB)
         self.assertEqual(
             set(s),
-            {"disk", "wiki", "builtins", "maps", "map_builtins", "models", "models_error", "locations", "drives"},
+            {"disk", "wiki", "builtins", "maps", "map_builtins", "models", "models_error", "locations", "drives",
+             "translate", "translate_builtins", "dict", "dict_builtins"},
         )
         self.assertIsNone(s["models_error"])
         self.assertEqual(s["models"], [])
         self.assertEqual(s["maps"], [])
         self.assertEqual([b["name"] for b in s["map_builtins"]], ["czechia.pmtiles", "world.pmtiles"])
         self.assertEqual(s["disk"]["maps"], 0)
+
+    def test_upload_translation_model(self):
+        data = model_bytes("en", "de")
+        status, r = self.json("PUT", "/api/upload?kind=translate&file=translate-en_de-1_9_6.argosmodel", data)
+        self.assertEqual((status, r["name"], r["result"]), (200, "en_de.argosmodel", "added"), r)
+        s = self.json("GET", "/api/status")[1]
+        self.assertEqual([m["name"] for m in s["translate"]], ["en_de.argosmodel"])
+        self.assertEqual(s["disk"]["languages"], len(data))
+        status, r = self.json("GET", "/api/check?kind=translate&file=en_cs.argosmodel&size=10")
+        self.assertEqual((status, r["exists"]), (200, "builtin"))
+
+    def test_upload_model_with_wrong_pair_refused(self):
+        status, r = self.json("PUT", "/api/upload?kind=translate&file=fr_en.argosmodel", model_bytes("en", "de"))
+        self.assertEqual(status, 400)
+        self.assertIn("en_de", r["error"])
+        status, r = self.json("PUT", "/api/upload?kind=translate&file=x.zip", b"x")
+        self.assertEqual(status, 400)
+        self.assertEqual(self.json("GET", "/api/status")[1]["translate"], [])
+        self.assertEqual(list((self.dev / ".incoming").iterdir()), [])
+
+    def test_upload_dictionary(self):
+        status, r = self.json("PUT", "/api/upload?kind=dict&file=freedict-eng-ces-0.1.3.dictd.tar.xz", dict_bytes())
+        self.assertEqual((status, r["name"]), (200, "eng-ces.dictd.tar.xz"), r)
+        self.assertEqual([d["name"] for d in self.json("GET", "/api/status")[1]["dict"]], ["eng-ces.dictd.tar.xz"])
+        status, r = self.json("PUT", "/api/upload?kind=dict&file=junk.dictd.tar.xz", b"nope")
+        self.assertEqual(status, 400)
+        self.assertIn("not a dictionary", r["error"])
+
+    def test_delete_language_files(self):
+        self.json("PUT", "/api/upload?kind=translate&file=en_de.argosmodel", model_bytes("en", "de"))
+        self.json("PUT", "/api/upload?kind=dict&file=eng-ces.dictd.tar.xz", dict_bytes())
+        self.assertEqual(self.json("DELETE", "/api/translate/en_de.argosmodel")[0], 200)
+        self.assertEqual(self.json("DELETE", "/api/dict/eng-ces.dictd.tar.xz")[0], 200)
+        s = self.json("GET", "/api/status")[1]
+        self.assertEqual((s["translate"], s["dict"]), ([], []))
+        self.assertEqual(self.json("DELETE", "/api/translate/en_cs.argosmodel")[0], 403)
+        self.assertEqual(self.json("DELETE", "/api/dict/wordnet.dictd.tar.xz")[0], 403)
+
+    def test_page_lists_languages(self):
+        page = self.call("GET", "/")[1].decode()
+        self.assertIn('id="languages"', page)
+        self.assertIn("Translation models", page)
+        self.assertIn("Dictionaries", page)
+        self.assertIn('data-import="translate"', page)
+        self.assertIn('data-import="dict"', page)
+        self.assertIn("<td>en_cs</td><td>built in</td>", page)
+        self.assertIn("<td>wordnet</td><td>built in</td>", page)
 
     def test_page_has_maps_section(self):
         page = self.call("GET", "/")[1]
@@ -464,6 +546,31 @@ class NoMapsApi(Api):
 
     test_upload_map_note_and_builtin_replace = test_upload_map_roundtrip
     test_upload_map_refused = test_upload_map_roundtrip
+
+
+class NoLanguageApi(Api):
+    """A box without the Language service: no Languages section, its uploads refused."""
+
+    language_enabled = False
+
+    def test_status_shape(self):
+        s = self.json("GET", "/api/status")[1]
+        self.assertIsNone(s["translate"])
+        self.assertIsNone(s["dict"])
+        self.assertEqual((s["translate_builtins"], s["dict_builtins"]), ([], []))
+
+    def test_page_lists_languages(self):
+        self.assertNotIn(b'id="languages"', self.call("GET", "/")[1])
+
+    def test_upload_translation_model(self):
+        status, r = self.json("PUT", "/api/upload?kind=translate&file=en_de.argosmodel", model_bytes())
+        self.assertEqual(status, 400)
+        self.assertIn("no Language service", r["error"])
+        self.assertEqual(self.json("DELETE", "/api/dict/x.dictd.tar.xz")[0], 400)
+
+    test_upload_model_with_wrong_pair_refused = test_upload_translation_model
+    test_upload_dictionary = test_upload_translation_model
+    test_delete_language_files = test_upload_translation_model
 
 
 if __name__ == "__main__":

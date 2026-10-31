@@ -141,20 +141,23 @@ ITEM = ("name", "file", "size", "mtime", "location", "status", "reason")
 
 
 class Shelf:
-    """Wiki books (.zim) or maps (.pmtiles) on all locations, next to the built-in ones.
+    """Wiki books (.zim), maps (.pmtiles), translation models (.argosmodel) or dictionaries
+    (.dictd.tar.xz) on all locations, next to the built-in ones.
 
     places: library.Places — the locations (this device, added drives) and the library's
     last result: which copy of a name is in use, which are duplicates or invalid (ADR-0006).
     builtins: file name → size of the built-in files (not deletable; an import of the same
     name replaces one until it is deleted). protected: stems that can't even be replaced.
-    validate(path) → a note for the user or None; raises Refused when the file is unusable.
+    validate(path) → a note for the user or None; raises Refused when the file is unusable
+    (validate(path, name) when named).
     refresh(): rebuild the library and tell the services.  noun: "book", "map" (messages).
     """
 
-    def __init__(self, places, kind, builtins, protected, validate, refresh, noun):
+    def __init__(self, places, kind, builtins, protected, validate, refresh, noun, named=False):
         self.places = places
-        self.kind = kind  # the folder on every location: wiki/, maps/
-        self.ext = {"wiki": ".zim", "maps": ".pmtiles"}[kind]
+        self.kind = kind  # the folder on every location: wiki/, maps/, translate/, dict/
+        self.ext = {"wiki": ".zim", "maps": ".pmtiles", "translate": ".argosmodel", "dict": ".dictd.tar.xz"}[kind]
+        self.named = named  # validate(path, stored name) — a translation model's name is its pair
         self.builtins = dict(builtins)
         self.protected = set(protected)
         self.validate = validate
@@ -202,7 +205,7 @@ class Shelf:
             self._check(name)
             if self._stem(name) in self.protected:
                 raise Refused("the box's own manuals can't be replaced", status=403)
-            note = self.validate(tmp)
+            note = self.validate(tmp, name) if self.named else self.validate(tmp)
             os.chmod(tmp, 0o644)  # kiwix-serve / nginx run unprivileged
             target = loc.root / self.kind / name
             old = self._in_use(name)
