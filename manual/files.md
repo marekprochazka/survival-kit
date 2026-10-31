@@ -7,8 +7,9 @@ works without internet.
 **First use.** Open Files and choose **Sign up**. As the name, use your name followed by
 `@files.deck`, e.g. **`anna@files.deck`** (the box's convention for logins — see
 [What's on this box](whats-on-this-box.html)). Use only letters, digits and `@ _ . -` in
-the name (not a `.` first, no `..`). The password needs at least 12 characters. Everyone
-at this box can make their own account; your files are yours — others can't see them.
+the name (not a `.` first, no `..`). Any password works, except an empty one and very
+common ones like `password123`. Everyone at this box can make their own account; your
+files are yours — others can't see them.
 
 **Your folders.** After logging in you see:
 
@@ -28,7 +29,6 @@ the drive, but your files stay on it as well.
 
     sudo survival-kit-files reset-password anna@files.deck
 
-and type a new password twice (at least 12 characters). Files is off for a few seconds
-while it changes.
+and type a new password twice. Files is off for a few seconds while it changes.
 
 Using Files from phones and other computers comes with the planned Wi-Fi hub mode.

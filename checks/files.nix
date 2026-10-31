@@ -71,7 +71,8 @@ pkgs.testers.runNixOSTest {
     with subtest("sign-up gives a space"):
         assert code("POST", "/signup", data=account(ANNA, "anna-password-1")) == "200"
         assert code("POST", "/signup", data=account(BEN, "ben-password-12")) == "200"
-        assert code("POST", "/signup", data=account("short@files.deck", "too-short")) != "200"
+        assert code("POST", "/signup", data=account("short@files.deck", "k7")) == "200"  # any length
+        assert code("POST", "/signup", data=account("empty@files.deck", "")) == "400"
         # names File Browser would change into another account's folder, or hide (patched)
         for bad in ["anna..@files.deck", "anna b@files.deck", ".anna@files.deck"]:
             assert code("POST", "/signup", data=account(bad, "some-password-1")) == "400", bad
@@ -135,7 +136,8 @@ pkgs.testers.runNixOSTest {
 
     with subtest("password reset"):
         machine.succeed(f"printf 'new-password-123\\nnew-password-123\\n' | survival-kit-files reset-password {BEN}")
-        machine.fail(f"printf 'short\\nshort\\n' | survival-kit-files reset-password {BEN}")
+        machine.fail(f"printf 'one\\ntwo\\n' | survival-kit-files reset-password {BEN}")  # differ
+        machine.fail(f"printf '\\n\\n' | survival-kit-files reset-password {BEN}")  # empty
         ready()
         login(BEN, "new-password-123")
         assert code("POST", "/login", data=account(BEN, "ben-password-12")) != "200"

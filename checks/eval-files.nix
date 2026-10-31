@@ -27,7 +27,8 @@ assert lib.assertMsg (lib.all (f: lib.hasInfix f setup) [
   "--perm.share=false"
   "--signup"
   "--createUserDir"
-]) "File Browser: sign-up with a home each, no admins, no sharing links";
+  "'--minimumPasswordLength=1'" # quoted: not =12
+]) "File Browser: sign-up with a home each, any password length, no admins, no sharing links";
 assert lib.assertMsg (
   root.mode == "0755" && root.user == "root"
 ) "the view root is root's (File Browser can't drop files there)";

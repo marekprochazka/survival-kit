@@ -26,7 +26,7 @@ let
     "--auth.method=json"
     "--signup"
     "--createUserDir" # sign-up makes users/<account>/
-    "--minimumPasswordLength=12"
+    "--minimumPasswordLength=1" # any password (File Browser still refuses empty and very common ones)
     # what every new account may do: its own files, nothing more
     "--perm.admin=false"
     "--perm.share=false" # no public links
@@ -61,7 +61,7 @@ let
       read -rsp "New password for $name: " pw; echo >&2
       read -rsp "Once more: " again; echo >&2
       [ "$pw" = "$again" ] || { echo "survival-kit-files: the two passwords differ" >&2; exit 1; }
-      [ ''${#pw} -ge 12 ] || { echo "survival-kit-files: at least 12 characters" >&2; exit 1; }
+      [ -n "$pw" ] || { echo "survival-kit-files: the password can't be empty" >&2; exit 1; }
       # File Browser locks its database while it runs: stop it, always start it again
       systemctl stop filebrowser.service
       trap 'systemctl start filebrowser.service' EXIT

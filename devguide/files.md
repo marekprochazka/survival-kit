@@ -80,7 +80,8 @@ File Browser's group write, everyone reads.
 
 File Browser keeps its settings in its database (`/var/lib/filebrowser/database.db`). The
 unit's `preStart` sets them on every start (`filebrowser config init` the first time,
-`config set` after): JSON logins, sign-up on, minimum password length 12, new accounts may
+`config set` after): JSON logins, sign-up on, minimum password length 1 (user's call: any password; File Browser itself still refuses an
+empty one and those on its built-in list of common passwords), new accounts may
 create/rename/change/delete/download but **not** share (public links), run commands or
 administer; dotfiles hidden, command runner off, branding "Files" without external links.
 **Sign-up is patched** (`signup.patch`): File Browser turns a name into its home folder name
@@ -93,7 +94,7 @@ account with a printed password) never runs. Nobody is admin; there is no user m
 page.
 
 **Forgotten password:** `sudo survival-kit-files reset-password <name>` — asks twice
-(≥ 12 characters), stops File Browser (its database is locked while it runs), runs
+(not empty), stops File Browser (its database is locked while it runs), runs
 `filebrowser users update <name> --password …` as the `filebrowser` user and starts it
 again.
 
