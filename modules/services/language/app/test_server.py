@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import archives
 import server
 from test_langfiles import make_dict, make_model
 from test_translate import Echo
@@ -80,6 +81,36 @@ class Catalog(Base):
         translator, _, _ = self.catalog.current()
         self.assertEqual([x["code"] for x in translator.languages()], ["cs", "en"])
 
+    def test_damaged_cache_folder_is_redone(self):
+        # e.g. power lost while unpacking: info.json empty, .done already there
+        self.catalog.current()
+        folder = archives.unpack(self.builtins / "translate" / "en_cs.argosmodel", self.cache)
+        (folder / "info.json").write_text("")
+        broken = server.Catalog(self.library, self.builtins, self.cache, load=Echo)
+        translator, dicts, _ = broken.current()  # no exception: the others still work
+        self.assertEqual(list(dicts), ["wordnet"])
+        self.assertFalse(folder.exists())  # removed, so it is unpacked again next time
+        self.swap()
+        translator, _, _ = broken.current()
+        self.assertEqual(translator.route("en", "cs"), [("en", "cs")])
+
+    def test_unexpected_error_skips_that_file(self):
+        eng = make_dict(self.data / "dict" / "eng-ces.dictd.tar.xz", {"house": "dum"})
+        self.swap([("dict", "eng-ces.dictd.tar.xz", eng)])
+        real = server.dictd.Dictionary
+
+        def flaky(folder):
+            if "dum" in (Path(folder) / "dict.dict").read_text():
+                raise MemoryError
+            return real(folder)
+
+        server.dictd.Dictionary = flaky
+        try:
+            _, dicts, _ = self.catalog.current()
+        finally:
+            server.dictd.Dictionary = real
+        self.assertEqual(list(dicts), ["wordnet"])
+
     def test_catalog_rebuilds_after_library_swap(self):
         first = self.catalog.current()
         self.assertIs(self.catalog.current()[0], first[0])  # nothing changed: same objects
@@ -89,6 +120,15 @@ class Catalog(Base):
         self.assertIn("de", [x["code"] for x in translator.languages()])
         # a model already loaded stays loaded (same unpacked folder)
         self.assertIs(translator.models[("en", "cs")], first[0].models[("en", "cs")])
+
+    def test_rebuilt_translator_shares_lock_and_loaded(self):
+        first = self.catalog.current()[0]
+        de = make_model(self.data / "translate" / "de_en.argosmodel", "de", "en")
+        self.swap([("translate", "de_en.argosmodel", de)])
+        second = self.catalog.current()[0]
+        self.assertIsNot(first, second)
+        self.assertIs(first.lock, second.lock)  # still one translation at a time
+        self.assertIs(first.loaded, second.loaded)  # and one count of loaded models
 
     def test_cache_pruned(self):
         de = make_model(self.data / "translate" / "de_en.argosmodel", "de", "en")

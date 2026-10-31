@@ -204,10 +204,33 @@ class Dicts(unittest.TestCase):
         with self.assertRaises(Refused):
             langfiles.check_dict(self.dir / "d.dictd.tar.xz")
 
-    def test_check_dict_refuses_huge(self):
-        p = make_dict(self.dir / "d.dictd.tar.xz", {"house": "dům"})
-        with mock.patch.object(langfiles, "MAX_UNPACKED", 10), self.assertRaises(Refused):
+    def test_check_dict_refuses_huge_data(self):
+        # a few KB that unpack to much more: refused while streaming, never held in memory
+        p = make_dict(self.dir / "d.dictd.tar.xz", {f"w{i}": "x" * 100 for i in range(50)})
+        with mock.patch.object(langfiles, "MAX_DATA", 1000), self.assertRaises(Refused) as e:
             langfiles.check_dict(p)
+        self.assertIn("too big", str(e.exception))
+
+    def test_check_dict_refuses_huge_index(self):
+        p = make_dict(self.dir / "d.dictd.tar.xz", {f"w{i}": "x" for i in range(50)})
+        with mock.patch.object(langfiles, "MAX_INDEX", 100), self.assertRaises(Refused) as e:
+            langfiles.check_dict(p)
+        self.assertIn("too big", str(e.exception))
+
+    def test_check_dict_xz_memory_capped(self):
+        # the xz header says how much memory unpacking needs: more than the cap → refused
+        p = make_dict(self.dir / "d.dictd.tar.xz", {"house": "dům"})
+        with mock.patch.object(langfiles, "XZ_MEMLIMIT", 1), self.assertRaises(Refused):
+            langfiles.check_dict(p)
+
+    def test_copy_dict_data_streams(self):
+        p = make_dict(self.dir / "d.dictd.tar.xz", {"house": "dům"})
+        index, data_name = langfiles.dict_index(p)
+        chunks = []
+        size = langfiles.copy_dict_data(p, data_name, chunks.append)
+        self.assertEqual(size, len(b"".join(chunks)))
+        self.assertIn("dům".encode(), b"".join(chunks))
+        self.assertIn("house\t", index)
 
 
 if __name__ == "__main__":

@@ -10,10 +10,12 @@ leave the folder. Standard library only.
 
 import hashlib
 import json
+import lzma
 import os
 import shutil
 import tarfile
 import zipfile
+import zlib
 from pathlib import Path, PurePosixPath
 
 import langfiles
@@ -50,7 +52,8 @@ def unpack(archive, cache):
             _dict(archive, part)
         (part / DONE).write_text("")
         os.replace(part, folder)
-    except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError) as e:
+    except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, lzma.LZMAError, zlib.error, EOFError,
+            ValueError) as e:
         shutil.rmtree(part, ignore_errors=True)
         raise Unusable(f"{archive.name}: {e}") from e
     return folder
@@ -80,12 +83,10 @@ def _model(archive, dest):
 
 def _dict(archive, dest):
     langfiles.check_dict(archive)  # also refuses unsafe paths, links and huge archives
-    with tarfile.open(archive, "r:*") as t:
-        files = {m.name: m for m in t.getmembers() if m.isfile()}
-        index, data = langfiles.dict_members(files)
-        _write(dest, "dict.index", t.extractfile(files[index]))
-        raw = t.extractfile(files[data])
-        (dest / "dict.dict").write_bytes(langfiles.read_data(raw, data, langfiles.MAX_UNPACKED))
+    index, data = langfiles.dict_index(archive)  # streamed: memory stays small
+    (dest / "dict.index").write_text(index, "utf-8")
+    with open(dest / "dict.dict", "wb") as out:
+        langfiles.copy_dict_data(archive, data, out.write)
 
 
 def prune(cache, keep):

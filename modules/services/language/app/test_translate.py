@@ -65,6 +65,19 @@ class Split(unittest.TestCase):
     def test_split_czech_capitals(self):
         self.assertEqual(translate.split("Prší. Čekáme."), [["Prší.", "Čekáme."]])
 
+    def test_split_scripts_without_capitals(self):
+        self.assertEqual(translate.split("مرحبا بالعالم. هذا نص طويل. وهذا آخر."),
+                         [["مرحبا بالعالم.", "هذا نص طويل.", "وهذا آخر."]])
+        self.assertEqual(translate.split("你好。我是学生。今天天气很好！"), [["你好。", "我是学生。", "今天天气很好！"]])
+
+    def test_split_cuts_long_sentences(self):
+        long = ", ".join(["one two three four five"] * 40)  # ~1000 characters, no full stop
+        parts = translate.split(long)[0]
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(len(p) <= translate.MAX_SENTENCE for p in parts), [len(p) for p in parts])
+        self.assertEqual(" ".join(parts), long)
+        self.assertTrue(all(len(p) <= translate.MAX_SENTENCE for p in translate.split("x" * 1000)[0]))
+
     def test_split_empty(self):
         self.assertEqual(translate.split("  \n\n "), [])
 
@@ -144,6 +157,30 @@ class Routes(unittest.TestCase):
         out = t.translate("Hallo Welt.", "de", "cs")
         self.assertTrue(out.startswith("["), out)  # both hops tagged it
         self.assertEqual(out.count("["), 2, out)
+
+    def test_lru_unloads_oldest(self):
+        loads = []
+
+        def load(folder):
+            loads.append(folder.name)
+            return Echo(folder)
+
+        models = {p: model(self.tmp, *p, load=load) for p in [("en", "cs"), ("cs", "en"), ("en", "de")]}
+        t = translate.Translator(models, loaded=translate.Loaded(limit=2))
+        t.translate("A.", "en", "cs")
+        t.translate("A.", "cs", "en")
+        t.translate("A.", "en", "de")
+        self.assertIsNone(models[("en", "cs")]._translator)  # the oldest went
+        self.assertIsNotNone(models[("en", "de")]._translator)
+        self.assertIsNotNone(models[("cs", "en")]._translator)
+        t.translate("A.", "en", "cs")  # loads again when needed
+        self.assertEqual(len(loads), 4)
+
+    def test_pivot_fits_in_two(self):
+        models = {p: model(self.tmp, *p, load=Tagged) for p in [("de", "en"), ("en", "cs")]}
+        t = translate.Translator(models, loaded=translate.Loaded(limit=2))
+        self.assertEqual(t.translate("Hallo.", "de", "cs").count("["), 2)
+        self.assertTrue(all(m._translator is not None for m in models.values()))
 
     def test_translate_caps_length(self):
         t = self.translator(("en", "cs"))

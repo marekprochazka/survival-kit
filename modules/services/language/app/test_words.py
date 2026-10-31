@@ -11,8 +11,10 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 import archives
+import langfiles
 import dictd
 import thesaurus
 from test_langfiles import make_dict, make_model
@@ -54,6 +56,12 @@ class Archives(unittest.TestCase):
         folder = archives.unpack(d, self.cache)
         self.assertEqual(sorted(p.name for p in folder.iterdir()), [".done", "dict.dict", "dict.index"])
         self.assertIn(b"house", (folder / "dict.dict").read_bytes())
+
+    def test_unpack_dict_refuses_huge_data(self):
+        d = make_dict(self.tmp / "big.dictd.tar.xz", {f"w{i}": "x" * 100 for i in range(50)})
+        with mock.patch.object(langfiles, "MAX_DATA", 1000), self.assertRaises(archives.Unusable):
+            archives.unpack(d, self.cache)
+        self.assertEqual(list(self.cache.iterdir()), [])  # nothing half-written left
 
     def test_extract_refuses_traversal(self):
         bad = self.tmp / "bad.dictd.tar.xz"

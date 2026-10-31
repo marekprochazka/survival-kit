@@ -10,7 +10,7 @@ dictionary (dictd files), thesaurus (Moby). ADR-0007.
 | Kind (folder) | File | Stored as | Checked by |
 |---|---|---|---|
 | `translate/` | an Argos package, `translate-<from>_<to>-<version>.argosmodel` | `<from>_<to>.argosmodel` (one per direction) | `langfiles.check_model`: a zip with `metadata.json` (`from_code`, `to_code`, names), `model/model.bin` and `sentencepiece.model` or `bpe.model`; no unsafe paths, ≤ 2 GiB unpacked; the pair must match the name |
-| `dict/` | a FreeDict dictd archive, `freedict-<name>-<version>.dictd.tar.xz` | `<name>.dictd.tar.xz` | `langfiles.check_dict`: one `.index` + one `.dict`/`.dict.dz`, index lines parse and point inside the data; title from `00-database-short` |
+| `dict/` | a FreeDict dictd archive, `freedict-<name>-<version>.dictd.tar.xz` | `<name>.dictd.tar.xz` | `langfiles.check_dict`: one `.index` (≤ 32 MB) + one `.dict`/`.dict.dz` (≤ 512 MB unpacked), index lines parse and point inside the data; title from `00-database-short`. Read as a stream (xz with a 128 MB memory cap): a small crafted archive can't fill the memory of the root content manager |
 
 Both go through the usual machinery ([Storage](storage.html)): on any location, the library
 index (`library/translate/`, `library/dict/`), newer duplicate wins, invalid files marked,
@@ -23,7 +23,9 @@ the archive as published; only the service unpacks it.
 `/api/define`, `/api/synonyms`); the page is `app/static/` + the dashboard's `style.css`.
 
 - **What is installed** = the built-ins (`survivalKit.services.language.builtinDir`) and the
-  library index; a library file of a built-in's name replaces it. The catalog is rebuilt on
+  library index; a library file of a built-in's name replaces it. One file that can't be
+  used — broken, gone, a damaged cache folder (removed and unpacked again), anything else —
+  is left out and logged; it never takes the rest down. The catalog is rebuilt on
   the next request when the index changes (library.py swaps a symlink) or a file is gone (a
   drive pulled out) — no restart. A file that can't be used is left out and logged
   (`journalctl -u survival-kit-language`).
@@ -33,8 +35,10 @@ the archive as published; only the service unpacks it.
   `dict.dict` (`.dz` decompressed — entries are read by offset). Folders no longer in use are
   removed.
 - **Translate** (`translate.py`): text → paragraphs (blank lines) → sentences (after `. ! ? …`
-  before a capital or a digit, and at line breaks) → tokens → CTranslate2 (CPU, beam 4) →
-  text. Two tokenizer kinds, as in argostranslate 1.11:
+  unless the next word starts with a small letter — scripts without capitals split too —,
+  after `。！？`, and at line breaks; a sentence over 400 characters is cut at a comma or a
+  space, because a model silently cuts off what is much longer) → tokens → CTranslate2 (CPU,
+  beam 4) → text. Two tokenizer kinds, as in argostranslate 1.11:
   - **SentencePiece** (`sentencepiece.model`, older packages);
   - **Moses + BPE** (`bpe.model`, the OPUS-MT 1.9.x packages incl. the built-in en↔cs):
     `sacremoses` normalizes and tokenizes, Argos's `apply_bpe.py` (subword-nmt, MIT — copied
@@ -44,7 +48,10 @@ the archive as published; only the service unpacks it.
   No argostranslate/LibreTranslate: they pull in PyTorch, spaCy and Stanza (GBs). A pair
   without a model goes **through English** when both halves exist (`/api/languages` →
   `targets` and `direct`). One translation at a time (a lock); at most 5 000 characters.
-  Models load on first use and stay loaded (`MemoryHigh=1G`).
+  Models load on first use; at most **two** stay in memory (enough for a translation
+  through English), the one used longest ago is unloaded (`translate.Loaded`, under
+  `MemoryHigh=1G`). The lock and that count belong to the catalog, so a rebuild during a long
+  translation doesn't start a second one.
 - **Dictionary** (`dictd.py`): the index in memory (WordNet: ~147 000 words), case and outer
   spaces ignored; no match → words that start the same.
 - **Thesaurus** (`thesaurus.py`): Moby's 25 MB file, only the line offsets in memory.

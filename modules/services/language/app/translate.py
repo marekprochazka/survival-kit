@@ -17,8 +17,9 @@ from pathlib import Path
 from content import Refused
 
 MAX_CHARS = 5000
+MAX_SENTENCE = 400  # characters; a model cuts off what is much longer (no error), so cut first
 PIVOT = "en"
-_BREAK = re.compile(r"[.!?…]+[\"'”’»)\]]*\s+")
+_BREAK = re.compile(r"[.!?…]+[\"'”’»)\]]*\s+|[。！？]+[\"'”’»)\]」』]*\s*")
 
 
 def read_info(folder):
@@ -26,16 +27,36 @@ def read_info(folder):
     return json.loads((Path(folder) / "info.json").read_text())
 
 
+def _cut(sentence):
+    """A sentence longer than MAX_SENTENCE in pieces, at the last comma or space that fits."""
+    out = []
+    while len(sentence) > MAX_SENTENCE:
+        at = sentence.rfind(", ", 0, MAX_SENTENCE)
+        if at > 0:
+            out.append(sentence[: at + 1])
+            sentence = sentence[at + 2 :]
+            continue
+        at = sentence.rfind(" ", 0, MAX_SENTENCE + 1)
+        if at > 0:
+            out.append(sentence[:at])
+            sentence = sentence[at + 1 :]
+        else:
+            out.append(sentence[:MAX_SENTENCE])
+            sentence = sentence[MAX_SENTENCE:]
+    return [*out, sentence]
+
+
 def _sentences(line):
-    """A line split after . ! ? … when the next word starts with a capital letter or a digit."""
+    """A line split after . ! ? … unless the next word starts with a small letter (scripts
+    without capitals split too), and after 。！？; over-long sentences cut."""
     out, start = [], 0
     for m in _BREAK.finditer(line):
         nxt = line[m.end() : m.end() + 1]
-        if nxt and (nxt.isupper() or nxt.isdigit()):
+        if nxt and not nxt.islower():
             out.append(line[start : m.end()].strip())
             start = m.end()
     out.append(line[start:].strip())
-    return [s for s in out if s]
+    return [piece for s in out if s for piece in _cut(s)]
 
 
 def split(text):
@@ -105,6 +126,11 @@ class Model:
                 self._tokenizer = _SentencePiece(self.folder)
             self._translator = self.load(self.folder)
 
+    def unload(self):
+        """Free the model's memory; it loads again on its next use."""
+        self._translator = None
+        self._tokenizer = None
+
     def translate(self, sentences):
         """Each sentence translated (one batch)."""
         if not sentences:
@@ -128,12 +154,32 @@ class Model:
         return out
 
 
-class Translator:
-    """The installed models: {(from, to): Model}. One translation at a time (CPU-bound)."""
+class Loaded:
+    """Which models are in memory: at most `limit` (2 — a translation through English needs
+    both halves), the one used longest ago is unloaded first. Used under the translation lock."""
 
-    def __init__(self, models):
+    def __init__(self, limit=2):
+        self.limit = limit
+        self.models = []  # oldest use first
+
+    def use(self, model):
+        if model in self.models:
+            self.models.remove(model)
+        self.models.append(model)
+        while len(self.models) > self.limit:
+            self.models.pop(0).unload()
+
+
+class Translator:
+    """The installed models: {(from, to): Model}. One translation at a time (CPU-bound).
+
+    lock and loaded are shared by the catalog's successive Translators (a rebuild must not
+    let a second translation start, or load a model twice)."""
+
+    def __init__(self, models, lock=None, loaded=None):
         self.models = dict(models)
-        self.lock = threading.Lock()
+        self.lock = lock or threading.Lock()
+        self.loaded = loaded or Loaded()
 
     def languages(self):
         names = {}
@@ -164,6 +210,7 @@ class Translator:
         route = self.route(src, dst)
         with self.lock:
             for pair in route:
+                self.loaded.use(self.models[pair])
                 flat = self.models[pair].translate([s for p in paragraphs for s in p])
                 it = iter(flat)
                 paragraphs = [[next(it) for _ in p] for p in paragraphs]

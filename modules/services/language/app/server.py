@@ -19,6 +19,7 @@ API (writes take JSON bodies only — a form on another site can't send those)
 
 import json
 import os
+import shutil
 import sys
 import threading
 import urllib.parse
@@ -57,6 +58,8 @@ class Catalog:
         self.cache = Path(cache)
         self.load = load
         self.lock = threading.Lock()
+        self.translating = threading.Lock()  # one translation at a time, across rebuilds
+        self.loaded = translate.Loaded()  # at most 2 models in memory
         self.stamp = None
         self.state = None
         self.models = {}  # unpacked folder → Model (keeps loaded models)
@@ -95,37 +98,38 @@ class Catalog:
                 self.stamp = stamp
             return self.state
 
-    def _unpack(self, path):
+    def _open(self, path, cached, make):
+        """(folder, make(folder)) for one file, or None when it can't be used right now — a
+        broken file, a drive just pulled out, a damaged cache folder (removed, so it is
+        unpacked again) or anything else: one file never takes the service down."""
+        folder = None
         try:
-            return archives.unpack(path, self.cache)
-        except (archives.Unusable, OSError) as e:  # a broken file, a drive just pulled out
-            log(f"{path.name} left out: {e}")
+            folder = archives.unpack(path, self.cache)
+            return folder, cached.get(folder) or make(folder)
+        except Exception as e:  # noqa: BLE001
+            log(f"{path.name} left out: {e!r}")
+            if folder is not None and not isinstance(e, archives.Unusable):
+                shutil.rmtree(folder, ignore_errors=True)
             return None
 
     def _build(self):
         src = self.sources()
         models, dicts, ids = {}, {}, {}
         for path in src["translate"].values():
-            folder = self._unpack(path)
-            if folder is None:
-                continue
-            model = self.models.get(folder) or translate.Model(folder, translate.read_info(folder), load=self.load)
-            models[folder] = model
+            got = self._open(path, self.models, lambda f: translate.Model(f, translate.read_info(f), load=self.load))
+            if got:
+                models[got[0]] = got[1]
         for name, path in src["dict"].items():
-            folder = self._unpack(path)
-            if folder is None:
-                continue
-            try:
-                dicts[folder] = self.dicts.get(folder) or dictd.Dictionary(folder)
-            except (OSError, ValueError) as e:
-                log(f"{name} left out: {e}")
-                continue
-            ids[name[: -len(langfiles.DICT_EXT)]] = dicts[folder]
+            got = self._open(path, self.dicts, dictd.Dictionary)
+            if got:
+                dicts[got[0]] = got[1]
+                ids[name[: -len(langfiles.DICT_EXT)]] = got[1]
         self.models, self.dicts = models, dicts
         archives.prune(self.cache, set(models) | set(dicts))
         order = sorted(ids, key=lambda i: (i != BUILTIN_DICT, ids[i].title.lower()))
         by_pair = {m.pair: m for m in models.values()}
-        return translate.Translator(by_pair), {i: ids[i] for i in order}, self.thesaurus
+        translator = translate.Translator(by_pair, lock=self.translating, loaded=self.loaded)
+        return translator, {i: ids[i] for i in order}, self.thesaurus
 
 
 @dataclass

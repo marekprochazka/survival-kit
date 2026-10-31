@@ -7,18 +7,24 @@ Here: the names they are stored under and the checks on import and in the librar
 files are only read, never unpacked to disk. Standard library only.
 """
 
-import gzip
+import contextlib
 import json
+import lzma
 import os
 import re
 import stat
 import tarfile
 import zipfile
+import zlib
 from pathlib import PurePosixPath
 
 from content import MAX_NAME, Refused
 
-MAX_UNPACKED = 2 * 1024**3  # bytes; a bigger model or dictionary is refused (zip bombs)
+MAX_UNPACKED = 2 * 1024**3  # bytes; a bigger model is refused (zip bombs)
+# dictionaries (FreeDict's biggest unpack to ~100 MB): smaller limits, checked while streaming
+MAX_INDEX = 32 * 1024**2
+MAX_DATA = 512 * 1024**2
+XZ_MEMLIMIT = 128 * 1024**2  # what xz may use to unpack (FreeDict's archives need 64 MB at most)
 MODEL_EXT = ".argosmodel"
 DICT_EXT = ".dictd.tar.xz"
 CODE = r"[a-z]{2,3}"
@@ -153,6 +159,43 @@ def entry_title(text):
     return rest[0] if rest else None
 
 
+XZ_MAGIC = b"\xfd7zXZ\x00"
+
+
+class _Xz:
+    """An xz stream to read from, decompressed with a memory cap (lzma.open has none)."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        self.unxz = lzma.LZMADecompressor(memlimit=XZ_MEMLIMIT)
+        self.buffer = b""
+
+    def read(self, n=-1):
+        n = 1 << 20 if n is None or n < 0 else n
+        while len(self.buffer) < n and not self.unxz.eof:
+            data = b"" if self.unxz.needs_input is False else self.raw.read(1 << 16)
+            if not data and self.unxz.needs_input:
+                raise EOFError("the archive is cut off")
+            self.buffer += self.unxz.decompress(data, n - len(self.buffer))
+        out, self.buffer = self.buffer[:n], self.buffer[n:]
+        return out
+
+
+@contextlib.contextmanager
+def _tar_stream(path):
+    """The archive as a forward-only tar stream; xz is opened with a memory cap (its header
+    says how much it needs — a crafted file can ask for GBs)."""
+    with open(path, "rb") as raw:
+        if raw.read(6) == XZ_MAGIC:
+            raw.seek(0)
+            with tarfile.open(fileobj=_Xz(raw), mode="r|") as t:
+                yield t
+        else:
+            raw.seek(0)
+            with tarfile.open(fileobj=raw, mode="r|*") as t:
+                yield t
+
+
 def dict_members(names):
     """(index member, data member) among an archive's member names. Raises ValueError."""
     indexes = [n for n in names if n.endswith(".index")]
@@ -162,43 +205,82 @@ def dict_members(names):
     return indexes[0], datas[0]
 
 
-def read_data(raw, name, limit):
-    """A dictionary's data, decompressed when it is .dict.dz; at most `limit` bytes."""
-    if name.endswith(".dz"):
-        with gzip.GzipFile(fileobj=raw) as g:
-            data = g.read(limit + 1)
-    else:
-        data = raw.read(limit + 1)
-    if len(data) > limit:
-        raise ValueError("too big unpacked")
-    return data
+def dict_index(path):
+    """First pass over a dictd archive: (index text, data member name). Every member is
+    checked (no unsafe paths, no links); only the index is read, at most MAX_INDEX bytes.
+    Raises Refused, ValueError or a tar/lzma error."""
+    names, index = [], None
+    with _tar_stream(path) as t:
+        for m in t:
+            if not _safe(m.name) or not (m.isfile() or m.isdir()):
+                raise Refused("it holds unsafe paths or links")
+            if not m.isfile():
+                continue
+            names.append(m.name)
+            if m.name.endswith(".index"):
+                if m.size > MAX_INDEX:
+                    raise Refused("its index is too big")
+                index = t.extractfile(m).read().decode("utf-8")
+    dict_members(names)
+    return index, next(n for n in names if n.endswith((".dict", ".dict.dz")))
+
+
+def copy_dict_data(path, name, write):
+    """Second pass: the data member `name`, decompressed when .dz, handed to write(chunk) bit
+    by bit; at most MAX_DATA bytes. Returns its size."""
+    with _tar_stream(path) as t:
+        for m in t:
+            if m.name != name:
+                continue
+            raw = t.extractfile(m)
+            unzip = zlib.decompressobj(16 + zlib.MAX_WBITS) if name.endswith(".dz") else None
+            size = 0
+            while True:
+                chunk = raw.read(1 << 20)
+                if not chunk:
+                    break
+                while chunk:
+                    if unzip:
+                        out = unzip.decompress(chunk, 1 << 20)  # never more than 1 MB at once
+                        chunk = unzip.unconsumed_tail
+                    else:
+                        out, chunk = chunk, b""
+                    size += len(out)
+                    if size > MAX_DATA:
+                        raise Refused("its data is too big unpacked")
+                    write(out)
+                    if unzip and unzip.eof:
+                        chunk = b""
+            return size
+    raise ValueError(f"{name} is missing")
 
 
 def check_dict(path):
-    """What a dictd archive holds: {title, words}. Raises Refused."""
+    """What a dictd archive holds: {title, words}. Raises Refused. Streams: memory use stays
+    small whatever the archive says about itself."""
     bad = "not a dictionary in dictd format"
     stem = os.path.basename(str(path))[: -len(DICT_EXT)] if str(path).endswith(DICT_EXT) else "dictionary"
     try:
-        with tarfile.open(path, "r:*") as t:
-            members = t.getmembers()
-            if any(not _safe(m.name) or not (m.isfile() or m.isdir()) for m in members):
-                raise Refused(f"{bad} (it holds unsafe paths or links)")
-            if sum(m.size for m in members) > MAX_UNPACKED:
-                raise Refused(f"{bad} (too big unpacked)")
-            files = {m.name: m for m in members if m.isfile()}
-            index_name, data_name = dict_members(files)
-            index = parse_index(t.extractfile(files[index_name]).read().decode("utf-8"))
-            data = read_data(t.extractfile(files[data_name]), data_name, MAX_UNPACKED)
-    except Refused:
-        raise
-    except (tarfile.TarError, OSError, EOFError, ValueError, UnicodeDecodeError) as e:
+        index_text, data_name = dict_index(path)
+        entries = parse_index(index_text)
+        del index_text
+        spot = next(((off, length) for word, off, length in entries if word in TITLE_WORDS), None)
+        title = bytearray()
+        pos = 0
+
+        def keep(chunk):  # only the title entry's bytes are kept
+            nonlocal pos
+            if spot and pos < spot[0] + spot[1] and pos + len(chunk) > spot[0]:
+                title.extend(chunk[max(0, spot[0] - pos) : spot[0] + spot[1] - pos])
+            pos += len(chunk)
+
+        size = copy_dict_data(path, data_name, keep)
+    except Refused as e:
         raise Refused(f"{bad} ({e})") from e
-    if any(off + length > len(data) for _, off, length in index):
+    except (tarfile.TarError, lzma.LZMAError, zlib.error, OSError, EOFError, ValueError, UnicodeDecodeError) as e:
+        raise Refused(f"{bad} ({e})") from e
+    if any(off + length > size for _, off, length in entries):
         raise Refused(f"{bad} (its index points outside its data)")
-    title, words = None, 0
-    for word, off, length in index:
-        if word in TITLE_WORDS:
-            title = entry_title(data[off : off + length].decode("utf-8", "replace"))
-        elif not word.startswith(("00-database", "00database")):
-            words += 1
-    return {"title": title or stem, "words": words}
+    words = sum(1 for word, _, _ in entries if word.strip() and not word.startswith(("00-database", "00database")))
+    name = entry_title(title.decode("utf-8", "replace")) if spot else None
+    return {"title": name or stem, "words": words}
