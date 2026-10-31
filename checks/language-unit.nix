@@ -16,6 +16,6 @@ pkgs.runCommand "language-unit" { nativeBuildInputs = [ python ]; } ''
   cp ${content}/langfiles.py ${content}/content.py ${content}/test_langfiles.py app/
   cp ${pkgs.python3Packages.argostranslate.src}/argostranslate/apply_bpe.py app/
   cd app
-  python3 -m unittest -v test_words 2>&1
+  python3 -m unittest -v test_words test_translate 2>&1
   touch $out
 ''
