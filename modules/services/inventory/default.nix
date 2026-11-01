@@ -36,6 +36,9 @@ let
       # database first: a photo without its record is harmless, a record without its photo isn't
       rm -f latest/homebox.db.tmp
       sqlite3 ${dataDir}/homebox.db ".backup 'latest/homebox.db.tmp'"
+      # the copy inherits WAL mode; switch it off so opening a copy never creates -wal/-shm
+      # files beside it (Homebox turns WAL back on itself after a restore)
+      sqlite3 latest/homebox.db.tmp "PRAGMA journal_mode=DELETE" >/dev/null
       mv -f latest/homebox.db.tmp latest/homebox.db
       rsync -a --delete --exclude 'homebox.db*' ${dataDir}/ latest/
       day=$(date +%F)
