@@ -30,9 +30,16 @@ assert lib.assertMsg (
   && (set.HBOX_OPTIONS_ALLOW_ANALYTICS or "false") == "false"
 ) "no telemetry, no analytics";
 assert lib.assertMsg (set.HBOX_WEB_MAX_UPLOAD_SIZE == "32") "uploads up to 32 MB (phone photos)";
-assert lib.assertMsg (lib.hasInfix "client_max_body_size 32m;"
+# Homebox accepts MaxUploadSize + 1 MB of multipart overhead (app/api/main.go); match it
+assert lib.assertMsg (lib.hasInfix "client_max_body_size 33m;"
   cfg.services.nginx.virtualHosts."inventory.deck".extraConfig
-) "nginx must let 32 MB uploads through (its default is 1 MB)";
+) "nginx must let a 32 MB file plus form overhead through (its default is 1 MB)";
+assert lib.assertMsg (
+  let
+    sc = cfg.systemd.services.backup-homebox.serviceConfig;
+  in
+  sc.Nice == 19 && sc.IOSchedulingClass == "idle"
+) "the backup must not slow the desktop (it often runs at boot)";
 assert lib.assertMsg (
   !(lib.elem "network-online.target" (unit.wants ++ unit.after))
 ) "a loopback-only service must not wait for the network";

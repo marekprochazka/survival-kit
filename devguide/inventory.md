@@ -21,8 +21,9 @@ The upstream module already gives us the `homebox` user, a confined unit (`Prote
   takes the scheme (https) and the client address (for its login rate limit) from nginx's
   forwarded headers. That's safe because it listens on loopback only.
 - `HBOX_OPTIONS_HOSTNAME = https://inventory.deck`: absolute links, e.g. invite links.
-- `HBOX_WEB_MAX_UPLOAD_SIZE = 32` (MB; upstream 10), with `client_max_body_size 32m` on the
-  vhost (nginx's default is 1 MB).
+- `HBOX_WEB_MAX_UPLOAD_SIZE = 32` (MB; upstream 10), with `client_max_body_size 33m` on the
+  vhost: Homebox itself accepts the limit + 1 MB of form overhead (`app/api/main.go`), and
+  nginx's default is 1 MB.
 - Off by default and left off: OpenTelemetry, analytics, barcode lookup (needs a token and
   the internet), OIDC.
 
@@ -42,13 +43,17 @@ invite the others.
 good copy before anyone noticed a problem) runs `homebox-backup` as root:
 
 1. No `homebox.db` yet (nobody signed up): nothing to do.
-2. `sqlite3 homebox.db ".backup latest/homebox.db.tmp"`: a consistent copy while Homebox
-   runs (the live DB is in WAL mode, so a plain `cp` could catch it mid-write). The copy is
+2. `sqlite3 homebox.db ".backup latest/homebox.db.tmp"` (waiting up to 10 s for a lock): a
+   consistent copy while Homebox runs (the live DB is in WAL mode, so a plain `cp` could
+   catch it mid-write). The copy is
    switched to `journal_mode=DELETE` so that opening it never creates `-wal`/`-shm` files
    beside it, then `mv`-ed over `latest/homebox.db`.
 3. `rsync -a --delete --exclude 'homebox.db*' data/ latest/`: the attachment folders (one
    per collection).
-4. `cp -al latest daily/<date>`: a **hard-link** copy; the newest 7 (by age) are kept.
+4. `cp -al latest daily/.<date>.tmp`, then renamed to `daily/<date>`: a **hard-link** copy,
+   built under a temporary name so an interrupted copy (disk full) never looks like a real
+   day; leftovers are deleted at the next run. The newest 7 (by age) are kept. The unit runs
+   with `Nice=19` and idle I/O: with `Persistent`, it often runs at boot next to the desktop.
 
 **The rule that makes hard links safe:** nothing in `latest/` is ever changed in place,
 because the same file is shared with every dated copy. The database is always a *new* file
@@ -67,6 +72,10 @@ against a dead disk.
 Homebox turns WAL mode back on itself (its database address carries
 `_pragma=journal_mode=WAL`).
 
+**Before an update that changes Homebox's version**, run `sudo systemctl start
+backup-homebox` first: the new version migrates the database at its first start, and a copy
+made by a newer version can't be restored into an older one.
+
 ## Tests
 
 - `eval-inventory`: settings above, both profiles, registry entry, nginx body size, no
@@ -74,6 +83,6 @@ Homebox turns WAL mode back on itself (its database address carries
 - `inventory` (VM): health and dashboard tile; the page and the scripts/styles it loads name
   no other hosts; sign-up + login through nginx; location + item with quantity, found by
   search; a 5 MB upload; backup integrity, not WAL, attachments present; a later backup
-  leaves an older dated copy untouched; 7 kept.
+  leaves an older dated copy untouched; 7 kept, a leftover half-made copy removed.
 
 Health: `/api/v1/status`. Logs: `journalctl -u homebox`, `journalctl -u backup-homebox`.

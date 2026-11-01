@@ -97,8 +97,11 @@ pkgs.testers.runNixOSTest {
         for d in range(2, 10):
             machine.succeed(f"cp -al {BK}/daily/{today} {BK}/daily/2001-01-0{d}")
             machine.succeed(f"touch -d 2001-01-0{d} {BK}/daily/2001-01-0{d}")
+        # a half-made copy from an interrupted run (e.g. disk full) under its temporary name
+        machine.succeed(f"mkdir -p {BK}/daily/.{today}.tmp/partial")
         machine.succeed("systemctl start backup-homebox.service")
-        kept = machine.succeed(f"ls {BK}/daily").split()
+        kept = machine.succeed(f"ls -A {BK}/daily").split()
         assert len(kept) == 7 and today in kept and "2000-01-01" not in kept, kept
+        machine.succeed(f"test -s {BK}/daily/{today}/homebox.db")
   '';
 }

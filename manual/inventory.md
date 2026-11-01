@@ -37,8 +37,10 @@ sees it unless you invite them.
 
 ## Good to know
 
-- **Photos use disk space.** They're stored on this box. Many large photos add up, so
-  check the disk now and then in [Content](content.html). One upload can be up to 32 MB.
+- **Photos use disk space.** They're stored on this box, and the nightly backup (below)
+  keeps a second copy on the same disk, so each photo takes about twice its size. Many
+  large photos add up: check the disk now and then in [Content](content.html). One upload
+  can be up to 32 MB.
 - **Backups.** Every day at 23:00 (or at the next start, if the box was off) the inventory,
   with its photos, is saved to `/var/backup/homebox`. The last 7 days are kept in `daily/`,
   one folder per day, so a mistake noticed a few days later can still be undone. Unchanged
@@ -50,8 +52,10 @@ sees it unless you invite them.
 
   To bring a copy back, see *Restoring a backup* in the developer guide's Inventory page.
 - **What it doesn't do.** It doesn't warn about expiry dates, and it has no shopping lists.
-  If you want a date on items (best-before, battery change), add a **custom field** of type
-  date to them. Looking up a product by its barcode needs the internet, so it doesn't work
+  Items have built-in **Purchase Date** and **Warranty Expires** fields. For any other date
+  (best-before, battery change), switch on **Advanced** in the item editor and add a
+  **custom field**, e.g. *Best before* = `2027-03`. Custom fields are plain text, so nothing
+  reminds you of the date. Looking up a product by its barcode needs the internet, so it doesn't work
   here.
 
 Using the inventory from phones and other computers comes with the planned Wi-Fi hub mode.

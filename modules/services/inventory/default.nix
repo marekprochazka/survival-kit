@@ -28,22 +28,27 @@ let
     ];
     text = ''
       if [ ! -f ${dataDir}/homebox.db ]; then
-        echo "no inventory database yet (nobody signed up) — nothing to back up"
+        echo "no inventory database yet (Homebox has never started) — nothing to back up"
         exit 0
       fi
       install -d -m 0700 ${backupRoot} ${backupRoot}/latest ${backupRoot}/daily
       cd ${backupRoot}
       # database first: a photo without its record is harmless, a record without its photo isn't
       rm -f latest/homebox.db.tmp
-      sqlite3 ${dataDir}/homebox.db ".backup 'latest/homebox.db.tmp'"
+      # wait up to 10 s if Homebox holds a lock (e.g. starting up) instead of skipping the night
+      sqlite3 -cmd '.timeout 10000' ${dataDir}/homebox.db ".backup 'latest/homebox.db.tmp'"
       # the copy inherits WAL mode; switch it off so opening a copy never creates -wal/-shm
       # files beside it (Homebox turns WAL back on itself after a restore)
       sqlite3 latest/homebox.db.tmp "PRAGMA journal_mode=DELETE" >/dev/null
       mv -f latest/homebox.db.tmp latest/homebox.db
       rsync -a --delete --exclude 'homebox.db*' ${dataDir}/ latest/
       day=$(date +%F)
+      # build under a temporary name, rename when complete: an interrupted copy (disk full)
+      # never looks like a real day, never counts toward the 7, can't be restored by mistake
+      rm -rf daily/.*.tmp
+      cp -al latest "daily/.$day.tmp"
       rm -rf "daily/$day"
-      cp -al latest "daily/$day"
+      mv "daily/.$day.tmp" "daily/$day"
       touch "daily/$day"
       # keep the newest 7 by age, not by name (a wrong clock must not make the newest look oldest)
       # shellcheck disable=SC2012 # names are dates (no spaces/newlines)
@@ -89,6 +94,9 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = lib.getExe backup; # as root: Homebox's files are 0600 homebox
+        # often runs at boot (Persistent, box off at 23:00) next to the desktop: stay out of the way
+        Nice = 19;
+        IOSchedulingClass = "idle";
       };
     };
     systemd.timers.backup-homebox = {
@@ -99,9 +107,9 @@ in
       };
     };
 
-    # nginx's default body limit is 1 MB; match Homebox's upload limit
+    # nginx's default body limit is 1 MB; match Homebox's (upload limit + 1 MB form overhead)
     services.nginx.virtualHosts."inventory.${config.survivalKit.web.domain}".extraConfig = ''
-      client_max_body_size 32m;
+      client_max_body_size 33m;
     '';
   };
 }
