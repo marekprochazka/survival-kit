@@ -32,6 +32,15 @@ assert lib.assertMsg (
 assert lib.assertMsg (
   (svc lite).lookup.enable && !(svc lite).chat.enable && (svc cfg).chat.enable
 ) "the wiki lookup (and MCP) on both profiles, the chat only on full";
+assert lib.assertMsg (
+  cfg.zramSwap.enable
+  && lite.zramSwap.enable
+  && cfg.zramSwap.memoryPercent == 50
+  && cfg.zramSwap.algorithm == "zstd"
+) "zram swap (zstd, 50 % of RAM) on both profiles";
+assert lib.assertMsg (
+  cfg.swapDevices == [ ] && lite.swapDevices == [ ]
+) "no swap file or partition on disk (decided: zram only)";
 assert lib.assertMsg liteOllama.services.ollama.enable
   "a hand override (lite + ollama.enable = true) must win over the profile default";
 pkgs.runCommand "eval-profiles" { } "touch $out"

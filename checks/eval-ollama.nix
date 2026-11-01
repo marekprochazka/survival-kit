@@ -18,4 +18,13 @@ assert lib.assertMsg (
 assert lib.assertMsg (lib.any (
   p: lib.getName p == "ollama"
 ) cfg.environment.systemPackages) "the ollama CLI must be installed";
+assert lib.assertMsg (
+  let
+    sc = cfg.systemd.services.ollama.serviceConfig;
+  in
+  sc.Nice == 10
+  && sc.CPUWeight == 20
+  && sc.IOSchedulingClass == "best-effort"
+  && sc.IOSchedulingPriority == 7
+) "ollama yields to the desktop (lower CPU and disk priority, not idle)";
 pkgs.runCommand "eval-ollama" { } "touch $out"

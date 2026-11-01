@@ -17,6 +17,15 @@ in
       port = 11434;
       # loadModels stays empty: pulling at boot needs internet (offline box)
     };
+    # Yield to the desktop: while the model thinks, Firefox and the panel still get CPU and
+    # disk first. Not the idle class — with nothing else running it still uses every core,
+    # so a chat answer isn't slower when you just wait for it.
+    systemd.services.ollama.serviceConfig = {
+      Nice = 10;
+      CPUWeight = 20; # cgroup share vs the default 100 of everything else
+      IOSchedulingClass = "best-effort";
+      IOSchedulingPriority = 7; # lowest within best-effort
+    };
     # the nixpkgs module also installs the ollama CLI (it talks to 127.0.0.1:11434)
   };
 }

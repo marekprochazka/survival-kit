@@ -22,4 +22,9 @@
   browser front end.
 - Package: the CPU build, ~150 MB. Small models (3B, Q4, ~2 GB) answer at a few words per
   second on an i5; 7B models crawl.
+- **Yields to the desktop:** `Nice = 10`, `CPUWeight = 20` (systemd's CPU share; everything
+  else has 100) and the lowest best-effort disk priority. While the model thinks, Firefox and
+  the panel get CPU first; with nothing else running it still uses every core. Not the
+  `idle` class: an answer someone is waiting for must not stall. Memory headroom comes from
+  zram (see [Base](base.html)).
 - Logs: `journalctl -u ollama`. API check: `curl http://127.0.0.1:11434/api/version`.

@@ -2,6 +2,16 @@
 {
   networking.networkmanager.enable = true;
 
+  # Swap in RAM, compressed (zstd ≈ 3:1): rarely used pages are squeezed instead of the box
+  # running out of memory (Firefox + wiki on 4 GB, a 3B model on 8 GB). 50 % = the most
+  # uncompressed data it may hold, nothing is reserved up front. No swap file on disk
+  # (decided): on old disks it makes a low-spec box feel broken rather than slow.
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+    memoryPercent = 50;
+  };
+
   # mDNS so the box answers to <hostname>.local on any LAN:
   services.avahi = {
     enable = true;

@@ -52,6 +52,9 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds(f"test $({CATALOG}) -eq {n}", timeout=120)
 
     machine.wait_for_unit("kiwix-library.service")
+    # zram swap is on (no swap file — decided)
+    machine.wait_until_succeeds("swapon --show=NAME --noheadings | grep -qx /dev/zram0", timeout=60)
+    assert "/dev/zram" in machine.succeed("swapon --show=NAME --noheadings"), "only zram swap"
     machine.wait_for_unit("kiwix-serve.service")
     machine.wait_for_unit("nginx.service")
     machine.wait_for_open_port(8080)
