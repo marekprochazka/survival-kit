@@ -197,6 +197,9 @@ def build_index(entries_by_kind, library):
     new = parent / f".library-{time.time_ns()}"
     for kind, entries in entries_by_kind.items():
         (new / kind).mkdir(parents=True)
+        if kind == "media":  # Jellyfin refuses a library whose folder is missing
+            for top in media.TOPS:
+                (new / kind / top).mkdir()
         for e in entries:
             if e["status"] == "in_use":
                 # kiwix-serve, nginx and Jellyfin run unprivileged: they must reach it

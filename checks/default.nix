@@ -52,6 +52,7 @@ evalChecks
   files = import ./files.nix args;
   language = import ./language.nix args;
   inventory = import ./inventory.nix args;
+  media = import ./media.nix args;
   installer-prompt = import ./installer-prompt.nix args;
   desktop = import ./desktop.nix args;
   firstboot = import ./firstboot.nix args;

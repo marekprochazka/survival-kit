@@ -327,6 +327,12 @@ class MediaKind(Base):
         self.assertEqual((m / "shows/S/Season 02").resolve(), s2.resolve())
         self.assertEqual((m / "music/A").resolve(), album.resolve())
 
+    def test_build_index_media_folders_always_there(self):
+        """Jellyfin refuses a library whose folder doesn't exist: an empty box has all three."""
+        lib = self.tmp / "library"
+        library.build_index({"media": []}, lib)
+        self.assertEqual(sorted(os.listdir(lib / "media")), ["movies", "music", "shows"])
+
     def test_build_index_media_readable_on_drive(self):
         film = self.item(self.drive, "movies/X", files=("deep/a.mkv",))
         (film / "deep/a.mkv").chmod(0o600)
