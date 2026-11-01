@@ -12,9 +12,13 @@ metadata). Uploads are cleaned strictly; on drives any existing name is used as 
 
 import os
 import re
+import secrets
+import shutil
+import threading
 import unicodedata
 from pathlib import Path
 
+import content
 from content import MAX_NAME, Refused
 
 VIDEO = {"mkv", "mp4", "m4v", "webm", "avi", "mov"}
@@ -195,3 +199,160 @@ def scan_items(loc):
             found.append({"name": name, "file": path.name, "path": path, "size": size, "mtime": mtime,
                           "location": loc.id, "refusal": None, "type": kind})
     return found
+
+
+# --- the Content page's shelf ---------------------------------------------------------
+
+NEEDS = {"film": (VIDEO, "a film needs exactly one video file"),
+         "series": (VIDEO, "a season needs at least one video file"),
+         "music": (AUDIO, "an album needs at least one audio file")}
+ITEM_KEYS = ("name", "file", "size", "mtime", "location", "status", "reason", "type")
+_ITEM = re.compile(r"^(movies/[^/]+|music/[^/]+|shows/[^/]+/[^/]+)$")
+
+
+def _number(text, what):
+    if not text.isdigit():
+        raise Refused(f"the {what} must be a number")
+    return int(text)
+
+
+def _open(folder):
+    """What the box imported is readable for everyone (Jellyfin, Files, nginx)."""
+    folder.chmod(0o755)
+    for top, dirs, files in os.walk(folder):
+        for d in dirs:
+            os.chmod(os.path.join(top, d), 0o755)
+        for f in files:
+            os.chmod(os.path.join(top, f), 0o644)
+
+
+class MediaShelf:
+    """Media on all locations, imported in batches: begin → receive each file → finish.
+
+    A batch is staged in the location's .incoming/media-<batch>/ and becomes the item only
+    when finished (renames on one filesystem), so a cut-off import leaves nothing.
+    places: library.Places; refresh(): rebuild the library (which asks Jellyfin to rescan).
+    """
+
+    def __init__(self, places, refresh):
+        self.places = places
+        self.refresh = refresh
+        self.batches = {}
+        self.lock = threading.Lock()
+
+    def items(self):
+        return [{k: e.get(k) for k in ITEM_KEYS} for e in self.places.entries("media")]
+
+    def used(self, at=None):
+        return sum(e["size"] for e in self.places.entries("media") if at is None or e["location"] == at)
+
+    def _in_use(self, item):
+        return next((e for e in self.places.entries("media") if e["name"] == item and e["status"] == "in_use"), None)
+
+    @staticmethod
+    def item_for(kind, fields):
+        """The item key an import makes, from the form's fields (text, as sent)."""
+        if kind == "film":
+            year = (fields.get("year") or "").strip()
+            return film_item(fields.get("title", ""), _number(year, "year") if year else None)
+        if kind == "series":
+            return season_item(fields.get("series", ""), _number(fields.get("season", "").strip(), "season"))
+        if kind == "music":
+            return music_item(fields.get("name", ""))
+        raise Refused("unknown kind of media")
+
+    def begin(self, kind, fields, loc, total):
+        item = self.item_for(kind, fields)
+        disk_total, free = self.places.disk(loc)
+        content.check_space(total, free, disk_total)
+        batch = secrets.token_hex(8)
+        staging = loc.root / ".incoming" / f"media-{batch}"
+        staging.mkdir(parents=True)
+        with self.lock:
+            self.batches[batch] = {"kind": kind, "item": item, "loc": loc, "total": total, "received": 0,
+                                   "files": set(), "dir": staging}
+        return {"batch": batch, "item": item, "exists": "import" if self._in_use(item) else None}
+
+    def _get(self, batch, pop=False):
+        with self.lock:
+            b = self.batches.pop(batch, None) if pop else self.batches.get(batch)
+        if b is None:
+            raise Refused("no such import (it was finished, cancelled or the box restarted)", status=404)
+        return b
+
+    def cancel(self, batch):
+        b = self._get(batch, pop=True)
+        shutil.rmtree(b["dir"], ignore_errors=True)
+
+    def receive(self, batch, relpath, length, stream):
+        b = self._get(batch)
+        name = file_name(b["kind"], b["item"], relpath)
+        if name in b["files"]:
+            raise Refused(f"{relpath}: a file of that name is already in this import")
+        if b["received"] + length > b["total"]:
+            self.cancel(batch)
+            raise Refused("more data arrived than the import announced; nothing was imported")
+        tmp = content.receive(stream, length, b["dir"])
+        try:
+            sniff(tmp, _ext(name))
+            target = b["dir"] / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(tmp, target)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        b["files"].add(name)
+        b["received"] += length
+
+    def finish(self, batch):
+        b = self._get(batch, pop=True)
+        try:
+            wanted, message = NEEDS[b["kind"]]
+            count = sum(1 for f in b["files"] if _ext(f) in wanted)
+            if count == 0 or (b["kind"] == "film" and count != 1):
+                raise Refused(message)
+            old = self._in_use(b["item"])
+            target = b["loc"].root / "media" / b["item"]
+            replaced = old is not None or target.exists()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            aside = b["dir"].with_name(b["dir"].name + "-old")
+            if target.exists() or target.is_symlink():
+                os.rename(target, aside)  # renames only: the item is never half there
+            _open(b["dir"])
+            os.rename(b["dir"], target)
+        except BaseException:
+            shutil.rmtree(b["dir"], ignore_errors=True)
+            raise
+        if aside.is_symlink() or not aside.is_dir():
+            aside.unlink(missing_ok=True)  # a link in the way: only the link goes
+        else:
+            shutil.rmtree(aside)
+        if old and old["path"] != target:
+            self._remove(old)  # the copy in use elsewhere is replaced, other copies stay
+        self.refresh()
+        return {"item": b["item"], "result": "replaced" if replaced else "added"}
+
+    def _remove(self, entry):
+        """Delete one item folder — only a real folder inside its location's media/ tree."""
+        loc = self.places.get(entry["location"])
+        base = (loc.root / "media").resolve()
+        path = Path(entry["path"])
+        if path.is_symlink() or not path.is_dir() or base not in path.resolve().parents:
+            raise Refused("that folder can't be deleted from here", status=403)
+        shutil.rmtree(path)
+        if entry["name"].startswith("shows/"):
+            try:
+                path.parent.rmdir()  # the series folder, when that was its last season
+            except OSError:
+                pass
+
+    def delete(self, item, at=None, file=None):
+        parts = item.split("/")
+        if not _ITEM.match(item) or any(p in ("", ".", "..") or p.startswith(".") for p in parts):
+            raise Refused("not a media item")
+        copies = [e for e in self.places.entries("media") if e["name"] == item]
+        copies = [e for e in copies if e["location"] == at] if at else [e for e in copies if e["status"] == "in_use"]
+        if not copies:
+            raise Refused("no such film, season or album", status=404)
+        self._remove(copies[0])
+        self.refresh()

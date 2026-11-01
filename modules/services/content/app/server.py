@@ -18,6 +18,12 @@ API
                                                   (models: device)
   DELETE /api/<wiki|maps|translate|dict>/<name>[?at=&file=], /api/models/<name>
                                                   one copy: on location `at`, else the one in use
+  GET    /api/media/suggest?file=                 a film's title and year from its file name
+  POST   /api/media/begin?type=film|series|music&size=[&to=]  + title, year | series, season | name
+                                                  → batch id, item, exists (space checked on the total)
+  PUT    /api/media/upload?batch=&file=           one file of the batch (body, Content-Length)
+  POST   /api/media/finish?batch=, /api/media/cancel?batch=
+  DELETE /api/media/<item>[?at=]                  a film, season or album (item = movies/<name>, …)
   POST   /api/resolve?at=                         move that location's invalid and duplicate
                                                   files out of the tree (set aside, not deleted)
   POST   /api/drives/add?uuid=[&name=], /api/drives/<uuid>/forget, /api/drives/<uuid>/reconnect
@@ -42,6 +48,7 @@ import content
 import drives as drv
 import langfiles
 import library
+import media as med
 import pmtiles
 from content import Refused
 
@@ -50,6 +57,8 @@ TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": 
 NO_MODELS = "no AI models on this box (lite profile)"
 NO_MAPS = "no maps on this box"
 NO_LANGUAGE = "no Language service on this box"
+NO_MEDIA = "no Media service on this box"
+MISSING = {"maps": NO_MAPS, "media": NO_MEDIA}  # by shelf; else NO_LANGUAGE
 # upload kind → (folder kind, the name a file is stored under, message when there is no such shelf)
 UPLOADS = {
     "map": ("maps", content.map_name, NO_MAPS),
@@ -97,7 +106,7 @@ def _status(item):
 def _drives(s, e):
     """The Drives section: where content lives, added drives, drives that could be added."""
     locs = {loc["id"]: loc for loc in s["locations"]}
-    items = s["wiki"] + (s["maps"] or []) + (s["translate"] or []) + (s["dict"] or [])
+    items = s["wiki"] + (s["maps"] or []) + (s["translate"] or []) + (s["dict"] or []) + (s["media"] or [])
     trouble = {}
     for i in items:
         if i["status"] != "in_use":
@@ -110,7 +119,7 @@ def _drives(s, e):
     out = [
         '<section id="drives"><h2>Drives</h2>',
         *([f'<p class="error">{e(s["drives"]["error"])}</p>'] if s["drives"].get("error") else []),
-        "<p>Books, maps and languages can live on this device and on drives that stay plugged in. "
+        "<p>Books, maps, languages and media can live on this device and on drives that stay plugged in. "
         "Files the box can't use, and older copies of a book or map it has elsewhere, are marked "
         "&ldquo;not in use&rdquo;; <em>Auto-resolve</em> moves them out of the way (nothing is deleted).</p>",
         "<table><tr><th>Where</th><th>Space</th><th>State</th><th></th></tr>",
@@ -156,7 +165,7 @@ def _drives(s, e):
         f'<option value="{e(loc["id"])}"{" selected" if n == 0 else ""}>{e(loc["name"])} ({_size(loc["free"])} free)</option>'
         for n, loc in enumerate(ready)
     ]
-    out.append(f'<p><label>Save new books, maps and languages to <select id="save-to">{"".join(opts)}</select></label></p></section>')
+    out.append(f'<p><label>Save new books, maps, languages and media to <select id="save-to">{"".join(opts)}</select></label></p></section>')
     return out
 
 
@@ -181,6 +190,59 @@ def _items(s, kind, items, builtins, cut, e):
             f"<td>{note}</td><td></td></tr>"
         )
     out.append("</table>")
+    return out
+
+
+def _media(s, e):
+    """The Media section: films, series seasons, albums; the three import forms."""
+    names = {loc["id"]: loc["name"] for loc in s["locations"]}
+    out = ['<section id="media"><h2>Media</h2>',
+           "<p>Films, series and music for the <em>Media</em> tile (Jellyfin). Everyone on the box sees them; "
+           "new imports show up there within a minute.</p>"]
+    for kind, heading in (("film", "Films"), ("season", "Series"), ("album", "Music")):
+        rows = [i for i in s["media"] if i["type"] == kind]
+        out.append(f"<h3>{heading}</h3>")
+        if not rows:
+            out.append('<p class="note">None yet.</p>')
+            continue
+        out.append("<table><tr><th>Name</th><th>Where</th><th>Size</th><th></th></tr>")
+        for i in sorted(rows, key=lambda i: i["name"].casefold()):
+            label = " — ".join(i["name"].split("/")[1:])  # "S — Season 01"
+            state = _status(i)
+            cls = ' class="unused"' if state else ""
+            note = f"<br><small>{e(state)}</small>" if state else ""
+            out.append(
+                f'<tr{cls}><td>{e(label)}{note}</td><td>{e(names.get(i["location"], i["location"]))}</td>'
+                f'<td>{_size(i["size"])}</td><td><button data-delete="media" data-name="{e(i["name"])}" '
+                f'data-at="{e(i["location"])}">Delete</button></td></tr>'
+            )
+        out.append("</table>")
+    video = ",".join(f".{x}" for x in sorted(med.VIDEO))
+    subs = ",".join(f".{x}" for x in sorted(med.SUBS))
+    audio = ",".join(f".{x}" for x in sorted(med.AUDIO | med.IMAGES))
+    out += [
+        '<h3>Import</h3>',
+        '<form data-media="film"><fieldset><legend>A film</legend>',
+        f'<label>Video file <input type="file" name="video" accept="{video}" required></label> ',
+        f'<label>Subtitles (optional) <input type="file" name="extra" accept="{subs}" multiple></label><br>',
+        '<label>Title <input name="title" required></label> ',
+        '<label>Year (optional) <input name="year" inputmode="numeric" size="4" pattern="[0-9]{4}"></label> ',
+        "<button>Import film</button></fieldset></form>",
+        '<form data-media="series"><fieldset><legend>A season of a series</legend>',
+        f'<label>Episode files <input type="file" name="video" accept="{video},{subs}" multiple required></label><br>',
+        '<label>Series <input name="series" required></label> ',
+        '<label>Season <input name="season" inputmode="numeric" size="3" value="1" required></label> ',
+        "<button>Import season</button>",
+        '<p class="note">Episodes are ordered by the number in their file names (S01E03, 1x03, …).</p>',
+        "</fieldset></form>",
+        '<form data-media="music"><fieldset><legend>An album</legend>',
+        '<label>Album folder <input type="file" name="folder" webkitdirectory></label> ',
+        f'<label>or tracks <input type="file" name="video" accept="{audio}" multiple></label><br>',
+        '<label>Name <input name="name" required></label> ',
+        "<button>Import album</button>",
+        '<p class="note">Artist, album and track order come from the tags inside the files.</p>',
+        "</fieldset></form></section>",
+    ]
     return out
 
 
@@ -213,6 +275,8 @@ def render(template, s):
         out.append(
             '<p><label>Import dictionaries <input type="file" data-import="dict" accept=".xz" multiple></label></p></section>'
         )
+    if s["media"] is not None:
+        out += _media(s, e)
     if s["models"] is not None:
         d = s["disk"]
         out.append('<section id="models"><h2>AI models</h2>')
@@ -234,11 +298,12 @@ def render(template, s):
     return template.replace("<!--CONTENT-->", "\n".join(out))
 
 
-def make_server(config, wiki, models, places, maps=None, drives=None, translate=None, dicts=None):
-    """places: library.Places. models / maps / drives / translate + dicts: None when the box
-    has no AI models (lite) / no maps service / no drive support (tests) / no Language service."""
+def make_server(config, wiki, models, places, maps=None, drives=None, translate=None, dicts=None, media=None):
+    """places: library.Places. models / maps / drives / translate + dicts / media: None when the
+    box has no AI models (lite) / no maps service / no drive support (tests) / no Language
+    service / no Media service."""
 
-    shelves = {"wiki": wiki, "maps": maps, "translate": translate, "dict": dicts}  # by folder
+    shelves = {"wiki": wiki, "maps": maps, "translate": translate, "dict": dicts, "media": media}  # by folder
 
     def languages_used(at):
         return sum(x.used(at) for x in (translate, dicts) if x)
@@ -263,7 +328,7 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
                 continue
             locs.append({"id": loc.id, "name": loc.name, "total": t, "free": f,
                          "wiki": wiki.used(loc.id), "maps": maps.used(loc.id) if maps else 0,
-                         "languages": languages_used(loc.id)})
+                         "languages": languages_used(loc.id), "media": media.used(loc.id) if media else 0})
         return {
             "disk": {
                 "total": total,
@@ -283,6 +348,7 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
             "translate_builtins": translate.builtin_items() if translate else [],
             "dict": dicts.items() if dicts else None,
             "dict_builtins": dicts.builtin_items() if dicts else [],
+            "media": media.items() if media else None,
             "models": model_items,
             "models_error": models_error,
         }
@@ -328,6 +394,11 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
     def space(factor, size, loc):
         total, free = places.disk(loc or places.get("device"))
         content.check_space(factor * size, free, total)
+
+    def media_shelf():
+        if media is None:
+            raise Refused(NO_MEDIA)
+        return media
 
     def drive_named(uuid):
         if drives is None or not any(d["uuid"] == uuid for d in drives.registry.drives()):
@@ -375,6 +446,8 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
                     self.send(200, {"name": name, "exists": store.exists(name)})
 
                 return self.route(check)
+            if path == "/api/media/suggest":
+                return self.route(lambda: self.send(200, med.suggest(q.get("file", ""))))
             if path in STATIC:
 
                 def page():
@@ -389,6 +462,16 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
 
         def do_PUT(self):
             path, q = self.parts()
+
+            def media_upload():
+                length = self.headers.get("Content-Length")
+                if length is None or not length.isdigit():
+                    raise Refused("the upload needs a Content-Length")
+                media_shelf().receive(q.get("batch", ""), q.get("file", ""), int(length), self.rfile)
+                self.send(200, {"file": q.get("file", ""), "result": "received"})
+
+            if path == "/api/media/upload":
+                return self.route(media_upload)
 
             def upload():
                 if path != "/api/upload":
@@ -413,7 +496,7 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
                 name = urllib.parse.unquote(name)
                 if kind in shelves:
                     if shelves[kind] is None:
-                        raise Refused(NO_MAPS if kind == "maps" else NO_LANGUAGE)
+                        raise Refused(MISSING.get(kind, NO_LANGUAGE))
                     shelves[kind].delete(name, q.get("at"), q.get("file"))
                 elif kind == "models":
                     if models is None:
@@ -463,6 +546,27 @@ def make_server(config, wiki, models, places, maps=None, drives=None, translate=
                     drives.apply()
                     return self.send(200, {"uuid": uuid, "result": "reconnected"} | drive_result(uuid))
                 raise Refused("not found", status=404)
+
+            def media_begin():
+                size = q.get("size", "")
+                if not size.isdigit():
+                    raise Refused("size must be a number of bytes")
+                shelf = media_shelf()
+                loc = places.get(q.get("to") or "device")
+                self.send(200, shelf.begin(q.get("type", ""), q, loc, int(size)))
+
+            def media_end(action):
+                def run():
+                    shelf = media_shelf()
+                    batch = q.get("batch", "")
+                    self.send(200, shelf.finish(batch) if action == "finish" else (shelf.cancel(batch) or {"result": "cancelled"}))
+
+                return run
+
+            if path == "/api/media/begin":
+                return self.route(media_begin)
+            if path in ("/api/media/finish", "/api/media/cancel"):
+                return self.route(media_end(path.rsplit("/", 1)[1]))
 
             def locked(fn):
                 def run():
@@ -637,6 +741,8 @@ def main():
             noun="dictionary",
         )
     models = content.Models(Ollama(config.model_incoming)) if env.get("OLLAMA") == "1" else None
+    # the library rebuild also asks Jellyfin to rescan
+    media = med.MediaShelf(places, library_refresh) if env.get("MEDIA") == "1" else None
     drives = Drives(
         registry=drv.Registry(env["REGISTRY"]),
         candidates=lambda: drv.candidates(drv.read_lsblk(), env["DRIVES_DIR"]),
@@ -644,7 +750,7 @@ def main():
         apply=drives_apply,
     )
 
-    httpd = make_server(config, wiki, models, places, maps, drives, translate, dicts)
+    httpd = make_server(config, wiki, models, places, maps, drives, translate, dicts, media)
     print(f"content manager on 127.0.0.1:{config.port}", flush=True)
     httpd.serve_forever()
 

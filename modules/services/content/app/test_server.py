@@ -5,6 +5,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import content
 import drives as drv
 import langfiles
 import locations
+import media
 import pmtiles
 import pmtiles_fixture
 import server
@@ -53,6 +55,7 @@ class Api(unittest.TestCase):
     models_enabled = True
     maps_enabled = True
     language_enabled = True
+    media_enabled = True
 
     def setUp(self):
         self.box = Box(usage=usage)
@@ -121,7 +124,9 @@ class Api(unittest.TestCase):
             state=lambda: json.loads(self.box.drive_state.read_text()) if self.box.drive_state.exists() else {},
             apply=self.mount_service,
         )
-        self.httpd = server.make_server(config, self.wiki, models, self.box.places, maps, self.drives, translate, dicts)
+        self.media = media.MediaShelf(self.box.places, self.box.rebuild) if self.media_enabled else None
+        self.httpd = server.make_server(config, self.wiki, models, self.box.places, maps, self.drives, translate, dicts,
+                                        self.media)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
 
@@ -182,13 +187,53 @@ class Api(unittest.TestCase):
         self.assertEqual(
             set(s),
             {"disk", "wiki", "builtins", "maps", "map_builtins", "models", "models_error", "locations", "drives",
-             "translate", "translate_builtins", "dict", "dict_builtins"},
+             "translate", "translate_builtins", "dict", "dict_builtins", "media"},
         )
         self.assertIsNone(s["models_error"])
         self.assertEqual(s["models"], [])
         self.assertEqual(s["maps"], [])
         self.assertEqual([b["name"] for b in s["map_builtins"]], ["czechia.pmtiles", "world.pmtiles"])
         self.assertEqual(s["disk"]["maps"], 0)
+
+    def media_import(self, kind, q, files):
+        total = sum(len(d) for _, d in files)
+        status, b = self.json("POST", f"/api/media/begin?type={kind}&size={total}&" + q, b"")
+        self.assertEqual(status, 200, b)
+        for name, data in files:
+            status, r = self.json("PUT", f"/api/media/upload?batch={b['batch']}&file={urllib.parse.quote(name)}", data)
+            self.assertEqual(status, 200, r)
+        return b, self.json("POST", f"/api/media/finish?batch={b['batch']}", b"")
+
+    def test_media_import_list_render_delete(self):
+        mkv, flac = b"\x1a\x45\xdf\xa3" + b"\0" * 20, b"fLaC" + b"\0" * 20
+        b, (status, r) = self.media_import("film", "title=The%20Kid&year=1921", [("The.Kid.mkv", mkv)])
+        self.assertEqual((status, b["item"], r["result"]), (200, "movies/The Kid (1921)", "added"), r)
+        self.media_import("series", "series=S&season=1", [("S01E01.mkv", mkv)])
+        self.media_import("music", "name=Blue%20Train", [("01 Blue Train.flac", flac)])
+        s = self.json("GET", "/api/status")[1]
+        self.assertEqual({(m["name"], m["type"]) for m in s["media"]},
+                         {("movies/The Kid (1921)", "film"), ("shows/S/Season 01", "season"), ("music/Blue Train", "album")})
+        self.assertEqual(s["locations"][0]["media"], 2 * len(mkv) + len(flac))
+        page = self.call("GET", "/")[1].decode()
+        self.assertIn('<section id="media">', page)
+        for text in ["Films", "Series", "Music", "The Kid (1921)", "S — Season 01", "Blue Train",
+                     'data-delete="media"', 'data-media="film"', 'data-media="series"', 'data-media="music"']:
+            self.assertIn(text, page)
+        quoted = urllib.parse.quote("movies/The Kid (1921)", safe="")
+        status, r = self.json("DELETE", f"/api/media/{quoted}?at=device")
+        self.assertEqual((status, r["result"]), (200, "deleted"), r)
+        self.assertNotIn("The Kid", json.dumps(self.json("GET", "/api/status")[1]["media"]))
+
+    def test_media_begin_refusals(self):
+        for q in ["type=film&title=T&size=abc", "type=film&title=T&year=17&size=1", "type=photos&name=x&size=1",
+                  "type=series&series=S&season=x&size=1"]:
+            with self.subTest(q=q):
+                self.assertEqual(self.json("POST", f"/api/media/begin?{q}", b"")[0], 400)
+        self.assertEqual(self.json("POST", "/api/media/finish?batch=nope", b"")[0], 404)
+
+    def test_suggest_endpoint(self):
+        status, r = self.json("GET", "/api/media/suggest?file=The.Kid.1921.mkv")
+        self.assertEqual((status, r), (200, {"title": "The Kid", "year": 1921}))
 
     def test_upload_translation_model(self):
         data = model_bytes("en", "de")
@@ -583,3 +628,21 @@ class NoLanguageApi(Api):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoMediaApi(Api):
+    """A box without Media: no Media section, media requests refused."""
+
+    media_enabled = False
+
+    def test_status_shape(self):
+        self.assertIsNone(self.json("GET", "/api/status")[1]["media"])
+
+    def test_media_import_list_render_delete(self):
+        self.assertNotIn(b'id="media"', self.call("GET", "/")[1])
+        status, r = self.json("POST", "/api/media/begin?type=film&title=T&size=1", b"")
+        self.assertEqual(status, 400)
+        self.assertIn("no Media", r["error"])
+        self.assertEqual(self.json("DELETE", "/api/media/movies%2FT?at=device")[0], 400)
+
+    test_media_begin_refusals = test_media_import_list_render_delete

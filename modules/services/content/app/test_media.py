@@ -155,5 +155,164 @@ class Scan(unittest.TestCase):
         self.assertGreaterEqual(found["movies/Kid (1921)"]["mtime"], 5000)
 
 
+MKV = SAMPLES["mkv"]
+FLAC = SAMPLES["flac"]
+SRT = SAMPLES["srt"]
+
+
+class Shelf(unittest.TestCase):
+    def setUp(self):
+        from test_content import Box  # noqa: PLC0415 — Box imports this module's neighbours
+
+        self.box = Box()
+        self.refreshes = []
+
+        def refresh():
+            self.refreshes.append(1)
+            self.box.rebuild()
+
+        self.shelf = media.MediaShelf(self.box.places, refresh)
+        self.dev = self.box.device()
+
+    def send(self, batch, name, data):
+        import io  # noqa: PLC0415
+
+        self.shelf.receive(batch, name, len(data), io.BytesIO(data))
+
+    def film(self, title="The Kid", year="1921", loc=None, files=(("x.mkv", MKV),)):
+        total = sum(len(d) for _, d in files)
+        b = self.shelf.begin("film", {"title": title, "year": year}, loc or self.dev, total)
+        for name, data in files:
+            self.send(b["batch"], name, data)
+        return b, self.shelf.finish(b["batch"])
+
+    def staging(self, loc=None):
+        return [p.name for p in ((loc or self.dev).root / ".incoming").iterdir()]
+
+    def test_batch_film(self):
+        b, r = self.film(files=(("x.mkv", MKV), ("x.cs.srt", SRT)))
+        self.assertEqual((b["item"], b["exists"], r["result"]), ("movies/The Kid (1921)", None, "added"))
+        folder = self.dev.root / "media/movies/The Kid (1921)"
+        self.assertEqual(sorted(os.listdir(folder)), ["The Kid (1921).cs.srt", "The Kid (1921).mkv"])
+        self.assertEqual((folder / "The Kid (1921).mkv").stat().st_mode & 0o777, 0o644)
+        self.assertEqual(folder.stat().st_mode & 0o777, 0o755)
+        self.assertEqual(len(self.refreshes), 1)
+        self.assertEqual(self.staging(), [])
+        [item] = self.shelf.items()
+        self.assertEqual((item["name"], item["type"], item["location"]), ("movies/The Kid (1921)", "film", "device"))
+
+    def test_batch_film_needs_one_video(self):
+        for files in [(("x.srt", SRT),), (("a.mkv", MKV), ("b.mp4", SAMPLES["mp4"]))]:
+            with self.subTest(files=[f for f, _ in files]):
+                with self.assertRaises(Refused):
+                    self.film(files=files)
+                self.assertFalse((self.dev.root / "media/movies/The Kid (1921)").exists())
+                self.assertEqual(self.staging(), [])
+
+    def test_batch_series_and_music_need_their_files(self):
+        b = self.shelf.begin("series", {"series": "S", "season": "1"}, self.dev, len(SRT))
+        self.send(b["batch"], "e.srt", SRT)
+        with self.assertRaises(Refused):
+            self.shelf.finish(b["batch"])
+        b = self.shelf.begin("music", {"name": "A"}, self.dev, len(SAMPLES["jpg"]))
+        self.send(b["batch"], "cover.jpg", SAMPLES["jpg"])
+        with self.assertRaises(Refused):
+            self.shelf.finish(b["batch"])
+        b = self.shelf.begin("music", {"name": "A"}, self.dev, 2 * len(FLAC))
+        self.send(b["batch"], "CD1/01.flac", FLAC)
+        self.send(b["batch"], "CD2/01.flac", FLAC)
+        self.shelf.finish(b["batch"])
+        self.assertTrue((self.dev.root / "media/music/A/CD2/01.flac").exists())
+        b = self.shelf.begin("series", {"series": "S", "season": "2"}, self.dev, len(MKV))
+        self.send(b["batch"], "S.S02E01.mkv", MKV)
+        self.assertEqual(self.shelf.finish(b["batch"])["item"], "shows/S/Season 02")
+        self.assertEqual(self.staging(), [])
+
+    def test_batch_replace(self):
+        drive = self.box.add_drive("u-1")
+        self.film(loc=drive)
+        b, r = self.film(loc=self.dev, files=(("y.mkv", MKV + b"new"),))
+        self.assertEqual((b["exists"], r["result"]), ("import", "replaced"))
+        self.assertFalse((drive.root / "media/movies/The Kid (1921)").exists())
+        new = self.dev.root / "media/movies/The Kid (1921)/The Kid (1921).mkv"
+        self.assertEqual(new.read_bytes(), MKV + b"new")
+        b, r = self.film(loc=self.dev, files=(("z.mkv", MKV + b"newer"),))  # same location
+        self.assertEqual(r["result"], "replaced")
+        self.assertEqual(new.read_bytes(), MKV + b"newer")
+        self.assertEqual(self.staging(), [])
+
+    def test_batch_over_declared_size(self):
+        b = self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, len(MKV) - 1)
+        with self.assertRaises(Refused):
+            self.send(b["batch"], "x.mkv", MKV)
+        self.assertEqual(self.staging(), [])
+        with self.assertRaises(Refused) as e:
+            self.shelf.finish(b["batch"])
+        self.assertEqual(e.exception.status, 404)
+
+    def test_batch_bad_files(self):
+        b = self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, 100)
+        self.send(b["batch"], "x.mkv", MKV)
+        with self.assertRaises(Refused):
+            self.send(b["batch"], "y.srt", SRT) or self.send(b["batch"], "z.srt", SRT)  # same stored name
+        with self.assertRaises(Refused):
+            self.send(b["batch"], "x.exe", b"MZ")
+        b2 = self.shelf.begin("film", {"title": "U", "year": ""}, self.dev, 100)
+        with self.assertRaises(Refused):
+            self.send(b2["batch"], "fake.mkv", b"not a video")  # the content check
+        self.assertEqual(os.listdir(self.dev.root / ".incoming" / f"media-{b2['batch']}"), [])
+        self.shelf.cancel(b2["batch"])
+        with self.assertRaises(Refused) as e:
+            self.send("nope", "x.mkv", MKV)
+        self.assertEqual(e.exception.status, 404)
+        self.shelf.cancel(b["batch"])
+        self.assertEqual(self.staging(), [])
+
+    def test_space_check_on_total(self):
+        with self.assertRaises(Refused):
+            self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, 49 * 1000**3)  # 50 GB free
+        self.assertEqual(self.staging(), [])
+
+    def test_staging_cleared_at_start(self):
+        import server  # noqa: PLC0415
+
+        left = self.dev.root / ".incoming/media-abc/x.mkv"
+        left.parent.mkdir(parents=True)
+        left.write_bytes(MKV)
+        server._clear(self.dev.root / ".incoming")
+        self.assertEqual(self.staging(), [])
+
+    def test_delete_item(self):
+        self.film()
+        b = self.shelf.begin("series", {"series": "S", "season": "1"}, self.dev, len(MKV))
+        self.send(b["batch"], "e1.mkv", MKV)
+        self.shelf.finish(b["batch"])
+        self.shelf.delete("movies/The Kid (1921)", "device")
+        self.assertFalse((self.dev.root / "media/movies/The Kid (1921)").exists())
+        self.shelf.delete("shows/S/Season 01", None)  # the copy in use
+        self.assertFalse((self.dev.root / "media/shows/S").exists())  # the last season took the series
+        self.assertEqual(self.shelf.items(), [])
+        with self.assertRaises(Refused) as e:
+            self.shelf.delete("movies/Gone", "device")
+        self.assertEqual(e.exception.status, 404)
+
+    def test_delete_never_leaves_the_tree(self):
+        self.film()
+        outside = Path(tempfile.mkdtemp())
+        (outside / "keep").write_text("x")
+        for bad in ["movies/../../wiki", "/etc", "movies", "shows/S", "movies/a/b", "other/x", "movies/.."]:
+            with self.subTest(bad=bad), self.assertRaises(Refused):
+                self.shelf.delete(bad, "device")
+        # the folder became a link after the library last looked (a drive edited elsewhere)
+        folder = self.dev.root / "media/movies/The Kid (1921)"
+        import shutil  # noqa: PLC0415
+
+        shutil.rmtree(folder)
+        os.symlink(outside, folder)
+        with self.assertRaises(Refused):
+            self.shelf.delete("movies/The Kid (1921)", "device")
+        self.assertTrue((outside / "keep").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
