@@ -43,4 +43,18 @@ assert lib.assertMsg (
   && reg.order == 17
   && reg.title == "Inventory"
 ) "registry entry inventory: port 7745, health /api/v1/status, order 17";
+assert lib.assertMsg (
+  cfg.systemd.services.backup-homebox.wantedBy == [ ]
+) "backups by timer only — a boot-time run would overwrite a good copy";
+assert lib.assertMsg
+  (lib.hasInfix "homebox-backup" cfg.systemd.services.backup-homebox.serviceConfig.ExecStart)
+  "the backup service runs homebox-backup";
+assert lib.assertMsg (
+  let
+    t = cfg.systemd.timers.backup-homebox;
+  in
+  lib.elem "timers.target" t.wantedBy
+  && t.timerConfig.OnCalendar == "23:00"
+  && t.timerConfig.Persistent
+) "nightly backup timer at 23:00, caught up at the next boot";
 pkgs.runCommand "eval-inventory" { } "touch $out"
