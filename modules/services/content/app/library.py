@@ -164,7 +164,7 @@ def _readable(path, bits):
 
 def _readable_tree(folder):
     """A media folder and everything in it readable for all (Jellyfin runs unprivileged);
-    links are not followed."""
+    links inside it are not followed (the way down to it is checked by _behind_link)."""
     _readable(folder, 0o555)
     for top, dirs, files in os.walk(folder):
         dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(top, d))]
@@ -173,6 +173,15 @@ def _readable_tree(folder):
         for f in files:
             if not os.path.islink(os.path.join(top, f)):
                 _readable(Path(top) / f, 0o444)
+
+
+def _behind_link(e):
+    """A media item whose way from its location's tree down has become a link since the scan
+    (a drive is anyone's): never opened up, linked or moved."""
+    if e["kind"] != "media":
+        return False
+    root = e["path"].parents[e["name"].count("/") + 1]  # movies/X → X, movies, media → the tree
+    return media.linked(root, e["path"])
 
 
 def _open_up(e):
@@ -201,7 +210,7 @@ def build_index(entries_by_kind, library):
             for top in media.TOPS:
                 (new / kind / top).mkdir()
         for e in entries:
-            if e["status"] == "in_use":
+            if e["status"] == "in_use" and not _behind_link(e):
                 # kiwix-serve, nginx and Jellyfin run unprivileged: they must reach it
                 _open_up(e)
                 link = new / kind / e["name"]
@@ -230,7 +239,7 @@ def set_aside(loc, entries, today, root):
     """
     moved = []
     for e in entries:
-        if e["location"] != loc.id or e["status"] not in ("invalid", "duplicate"):
+        if e["location"] != loc.id or e["status"] not in ("invalid", "duplicate") or _behind_link(e):
             continue
         day = Path(root) / today / e["kind"]
         if e["kind"] == "media":

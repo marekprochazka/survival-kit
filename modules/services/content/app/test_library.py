@@ -346,6 +346,28 @@ class MediaKind(Base):
         for d in [film / "deep", film, film.parent, film.parent.parent, self.drive.root, self.tmp]:
             self.assertEqual(d.stat().st_mode & 0o777, 0o755, d)
 
+    def test_index_and_set_aside_skip_items_behind_a_new_link(self):
+        """The folder above an item became a link after the scan (a drive is anyone's)."""
+        import shutil  # noqa: PLC0415
+
+        self.item(self.drive, "music/A", mtime=1000)  # a duplicate (set-aside would move it)
+        self.item(self.device, "music/A", mtime=2000)
+        self.item(self.drive, "music/B")  # in use (the index would open it up)
+        entries = self.resolve()
+        outside = self.tmp / "outside"
+        for name in ["A", "B"]:
+            (outside / name).mkdir(parents=True)
+            (outside / name / "a.mkv").write_bytes(b"x")
+            (outside / name / "a.mkv").chmod(0o600)
+        secret = outside / "B" / "a.mkv"
+        shutil.rmtree(self.drive.root / "media/music")
+        os.symlink(outside, self.drive.root / "media/music")
+        library.build_index({"media": entries}, self.tmp / "library")
+        self.assertEqual(secret.stat().st_mode & 0o777, 0o600)
+        self.assertFalse((self.tmp / "library/media/music/B").exists())
+        self.assertEqual(library.set_aside(self.drive, entries, "2026-11-01", self.tmp / "sa"), [])
+        self.assertTrue((outside / "A" / "a.mkv").exists())
+
     def test_set_aside_media_folder(self):
         self.item(self.device, "movies/X", mtime=1000)
         newer = self.item(self.drive, "movies/X", mtime=2000)

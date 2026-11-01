@@ -43,7 +43,11 @@ names with `:` are fine); only duplicates exist. The index has `media/movies/<na
 season links, so a series can have seasons on several locations. `movies/`, `shows/` and
 `music/` are always there (Jellyfin refuses a library whose folder is missing). Item
 folders, and every folder from the drive's root down to them, are made readable for
-Jellyfin; links inside a drive's media tree are never followed. After every rebuild the
+Jellyfin. **A link anywhere on the way** — the tree's root, `media/`, `media/<top>/`, a
+series or item folder — makes the box ignore what is behind it (`media.linked`): it is not
+listed, indexed, opened up, imported into, moved or deleted. A drive is anyone's, and the
+library and the content manager run as root. Links *inside* an item are not followed
+either. After every rebuild the
 library asks Jellyfin to rescan (`notify_media`, with the box's key — see
 [Media](media.html)). The index path of an item never changes when the index is rebuilt,
 so Jellyfin's watch progress stays.

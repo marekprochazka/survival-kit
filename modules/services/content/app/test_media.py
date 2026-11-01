@@ -143,6 +143,26 @@ class Scan(unittest.TestCase):
             self.assertEqual(e["location"], "device")
             self.assertTrue(e["path"].is_dir())
 
+    def test_scan_items_never_follows_links_above_items(self):
+        """A drive is anyone's: a link at media/, media/<top> or the tree's root must not make
+        the root library index (and chmod) whatever it points at."""
+        target = tree()
+        write(target / "secret/a.mkv")
+        (target / "secret/a.mkv").chmod(0o600)
+        for link in ["media/music", "media/movies", "media/shows"]:
+            with self.subTest(link=link):
+                loc = Location(id="u", name="u", root=tree(), order=1)
+                (loc.root / "media").mkdir()
+                os.symlink(target, loc.root / link)
+                self.assertEqual(media.scan_items(loc), [])
+        loc = Location(id="u", name="u", root=tree(), order=1)
+        os.symlink(target, loc.root / "media")
+        self.assertEqual(media.scan_items(loc), [])
+        linked_root = tree() / "survival-kit"
+        os.symlink(self.root, linked_root)
+        self.assertEqual(media.scan_items(Location(id="u", name="u", root=linked_root, order=1)), [])
+        self.assertEqual((target / "secret/a.mkv").stat().st_mode & 0o777, 0o600)
+
     def test_scan_items_no_media_folder(self):
         empty = Location(id="x", name="x", root=tree(), order=1)
         self.assertEqual(media.scan_items(empty), [])
@@ -295,6 +315,26 @@ class Shelf(unittest.TestCase):
         with self.assertRaises(Refused) as e:
             self.shelf.delete("movies/Gone", "device")
         self.assertEqual(e.exception.status, 404)
+
+    def test_import_and_delete_refuse_links_above_items(self):
+        outside = Path(tempfile.mkdtemp())
+        (outside / "keep").write_text("x")
+        os.symlink(outside, self.dev.root / "media/movies")  # no movies/ yet on a new tree
+        with self.assertRaises(Refused):
+            self.film()
+        self.assertEqual(sorted(os.listdir(outside)), ["keep"])
+        self.assertEqual(self.staging(), [])
+        # an item the library listed before the folder above it became a link
+        os.unlink(self.dev.root / "media/movies")
+        self.film()
+        import shutil  # noqa: PLC0415
+
+        shutil.move(str(self.dev.root / "media/movies/The Kid (1921)"), str(outside / "The Kid (1921)"))
+        (self.dev.root / "media/movies").rmdir()
+        os.symlink(outside, self.dev.root / "media/movies")
+        with self.assertRaises(Refused):
+            self.shelf.delete("movies/The Kid (1921)", "device")
+        self.assertTrue((outside / "The Kid (1921)").is_dir())
 
     def test_delete_never_leaves_the_tree(self):
         self.film()

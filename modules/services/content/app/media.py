@@ -160,6 +160,14 @@ def sniff(path, ext):
 # --- what is on a location ------------------------------------------------------------
 
 
+def linked(root, path):
+    """Is root, or any folder from root down to path, a symbolic link? A drive is anyone's:
+    a link anywhere on that way could lead the box (running as root) out of the tree."""
+    root, path = Path(root), Path(path)
+    parts = path.relative_to(root).parts
+    return any((root.joinpath(*parts[:n])).is_symlink() for n in range(len(parts) + 1))
+
+
 def _dirs(folder):
     """Real sub-folders, no hidden ones and no links (a drive's link could point anywhere)."""
     try:
@@ -190,6 +198,8 @@ def scan_items(loc):
     media = loc.root / "media"
     found = []
     for top, kind in TOPS.items():
+        if linked(loc.root, media / top):
+            continue
         if kind == "season":
             folders = [(f"{top}/{s.name}/{d.name}", d) for s in _dirs(media / top) for d in _dirs(s)]
         else:
@@ -313,6 +323,8 @@ class MediaShelf:
                 raise Refused(message)
             old = self._in_use(b["item"])
             target = b["loc"].root / "media" / b["item"]
+            if linked(b["loc"].root, target):
+                raise Refused("that place on the drive is a link; nothing was imported", status=403)
             replaced = old is not None or target.exists()
             target.parent.mkdir(parents=True, exist_ok=True)
             aside = b["dir"].with_name(b["dir"].name + "-old")
@@ -337,7 +349,8 @@ class MediaShelf:
         loc = self.places.get(entry["location"])
         base = (loc.root / "media").resolve()
         path = Path(entry["path"])
-        if path.is_symlink() or not path.is_dir() or base not in path.resolve().parents:
+        inside = path.is_relative_to(loc.root / "media") and not linked(loc.root, path)
+        if not inside or not path.is_dir() or base not in path.resolve().parents:
             raise Refused("that folder can't be deleted from here", status=403)
         shutil.rmtree(path)
         if entry["name"].startswith("shows/"):
