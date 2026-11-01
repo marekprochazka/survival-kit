@@ -19,6 +19,14 @@ assert lib.assertMsg (
 ) "autologin must use deck";
 assert lib.assertMsg cfg.users.mutableUsers
   "users must stay mutable (runtime password survives rebuilds)";
+assert lib.assertMsg (
+  svc.environment.FIRSTBOOT_MEDIA_SETUP == cfg.survivalKit.services.media.setupCommand
+) "first boot hands the name and password to the Media setup";
+assert lib.assertMsg (
+  (self.nixosConfigurations.survival-kit.extendModules {
+    modules = [ { survivalKit.services.media.enable = false; } ];
+  }).config.systemd.services.survival-kit-firstboot.environment.FIRSTBOOT_MEDIA_SETUP == ""
+) "no Media, no hand-over";
 assert lib.assertMsg (lib.elem "display-manager.service" svc.before)
   "first boot must run before the desktop";
 assert lib.assertMsg (

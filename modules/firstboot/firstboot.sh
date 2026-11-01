@@ -58,7 +58,7 @@ done
 # The password matters most: set it (and the marker) first, so a problem with
 # the name can never leave the account without a password.
 printf '%s:%s\n' "$FIRSTBOOT_USER" "$pass1" | chpasswd
-unset pass1 pass2 REPLY
+unset pass2 REPLY
 mkdir -p "$(dirname "$marker")"
 touch "$marker"
 
@@ -66,6 +66,18 @@ printf '%s\n' "$name" >"$namefile"
 if ! usermod -c "$name" "$FIRSTBOOT_USER"; then
   echo "Note: couldn't set the name shown on the desktop; everything else is done."
 fi
+
+# Media (Jellyfin) gets the same name and password for its first account. Both go on stdin
+# (printf is a shell builtin: nothing appears in a command line). Exit 2 = already set up.
+if [[ -n ${FIRSTBOOT_MEDIA_SETUP:-} ]]; then
+  echo "Setting up Media (this can take a minute)…"
+  media=0
+  printf '%s\n%s\n' "$name" "$pass1" | "$FIRSTBOOT_MEDIA_SETUP" || media=$?
+  if ((media != 0 && media != 2)); then
+    echo "Note: Media couldn't be set up now — the manual's Media page says how to finish it."
+  fi
+fi
+unset pass1
 echo
 echo "Done. Starting the desktop…"
 sleep 2

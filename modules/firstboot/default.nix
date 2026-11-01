@@ -9,6 +9,7 @@
 }:
 let
   cfg = config.survivalKit.firstBoot;
+  media = config.survivalKit.services.media; # gets the same name + password (one-time setup)
   marker = "/var/lib/survival-kit/firstboot-done";
   namefile = "/var/lib/survival-kit/display-name"; # written by firstboot.sh
   prompt = pkgs.writeShellApplication {
@@ -72,6 +73,8 @@ in
         "systemd-vconsole-setup.service"
       ];
       unitConfig.ConditionPathExists = "!${marker}";
+      # Media (Jellyfin) gets the same name + password for its first account (empty: no Media)
+      environment.FIRSTBOOT_MEDIA_SETUP = lib.optionalString media.enable media.setupCommand;
       # never (re)start on `nixos-rebuild switch`: it would grab tty1 on a running desktop
       restartIfChanged = false;
       serviceConfig = {

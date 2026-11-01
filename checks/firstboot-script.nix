@@ -27,6 +27,13 @@ pkgs.runCommand "firstboot-script" { } ''
   #!/bin/sh
   printf 'chpasswd [%s]\n' "$(cat)" >> "$CALLS"
   EOF
+  # the Media setup helper: records its two stdin lines and its arguments (must be none)
+  cat > bin/media-setup <<'EOF'
+  #!/bin/sh
+  read -r name; read -r pw
+  printf 'media [%s|%s] args[%s]\n' "$name" "$pw" "$*" >> "$CALLS"
+  exit "''${MEDIA_EXIT:-0}"
+  EOF
   chmod +x bin/*
   export PATH=$PWD/bin:$PATH CALLS=$PWD/calls
 
@@ -39,6 +46,31 @@ pkgs.runCommand "firstboot-script" { } ''
 
   ${run "comma in the name (splits GECOS) is rejected" "Smith, John\\nJohn Smith\\npw\\npw\\n"}
   ${expect "usermod John Smith"}
+
+  if grep -q '^media' "$CALLS"; then echo "media setup ran without FIRSTBOOT_MEDIA_SETUP"; exit 1; fi
+
+  echo "== Media: name and password handed over on stdin, after the box password"
+  rm -f "$CALLS" marker name
+  said=$(printf 'Test Person\npw\npw\n' | FIRSTBOOT_MEDIA_SETUP=$PWD/bin/media-setup FIRSTBOOT_USER=deck \
+    FIRSTBOOT_MARKER=$PWD/marker FIRSTBOOT_NAME_FILE=$PWD/name bash -euo pipefail ${script} 2>&1)
+  ${expect "media [Test Person|pw] args[]"}
+  [ "$(head -n1 "$CALLS")" = "chpasswd [deck:pw]" ] || { echo "the box password must come first"; cat "$CALLS"; exit 1; }
+  grep -q "Setting up Media" <<<"$said" || { echo "no 'Setting up Media' line"; echo "$said"; exit 1; }
+
+  echo "== Media setup failing never stops first boot"
+  rm -f "$CALLS" marker name
+  said=$(printf 'Test Person\npw\npw\n' | MEDIA_EXIT=1 FIRSTBOOT_MEDIA_SETUP=$PWD/bin/media-setup FIRSTBOOT_USER=deck \
+    FIRSTBOOT_MARKER=$PWD/marker FIRSTBOOT_NAME_FILE=$PWD/name bash -euo pipefail ${script} 2>&1) \
+    || { echo "first boot failed with the media setup"; echo "$said"; exit 1; }
+  ${expect "chpasswd [deck:pw]"}
+  test -e marker || { echo "marker missing after a media failure"; exit 1; }
+  grep -q "Media couldn't be set up" <<<"$said" || { echo "no failure note"; echo "$said"; exit 1; }
+
+  echo "== Media already set up (exit 2): no failure note"
+  rm -f "$CALLS" marker name
+  said=$(printf 'Test Person\npw\npw\n' | MEDIA_EXIT=2 FIRSTBOOT_MEDIA_SETUP=$PWD/bin/media-setup FIRSTBOOT_USER=deck \
+    FIRSTBOOT_MARKER=$PWD/marker FIRSTBOOT_NAME_FILE=$PWD/name bash -euo pipefail ${script} 2>&1)
+  if grep -q "couldn't be set up" <<<"$said"; then echo "exit 2 is not a failure"; exit 1; fi
 
   ${run "a failing name never costs the password" "Bad Name\\npw\\npw\\n"}
   ${expect "chpasswd [deck:pw]"}
