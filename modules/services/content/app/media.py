@@ -15,6 +15,7 @@ import re
 import secrets
 import shutil
 import threading
+import time
 import unicodedata
 from pathlib import Path
 
@@ -217,6 +218,7 @@ NEEDS = {"film": (VIDEO, "a film needs exactly one video file"),
          "series": (VIDEO, "a season needs at least one video file"),
          "music": (AUDIO, "an album needs at least one audio file")}
 ITEM_KEYS = ("name", "file", "size", "mtime", "location", "status", "reason", "type")
+IDLE = 30 * 60  # an import nobody added to for this long was abandoned (tab closed)
 _ITEM = re.compile(r"^(movies/[^/]+|music/[^/]+|shows/[^/]+/[^/]+)$")
 
 
@@ -249,6 +251,15 @@ class MediaShelf:
         self.refresh = refresh
         self.batches = {}
         self.lock = threading.Lock()
+        self.clock = time.monotonic
+
+    def _drop_abandoned(self):
+        """Imports left half-way (the tab was closed) free their space; checked at each begin."""
+        with self.lock:
+            old = [k for k, b in self.batches.items() if self.clock() - b["touched"] > IDLE]
+            dropped = [self.batches.pop(k) for k in old]
+        for b in dropped:
+            shutil.rmtree(b["dir"], ignore_errors=True)
 
     def items(self):
         return [{k: e.get(k) for k in ITEM_KEYS} for e in self.places.entries("media")]
@@ -273,6 +284,7 @@ class MediaShelf:
 
     def begin(self, kind, fields, loc, total):
         item = self.item_for(kind, fields)
+        self._drop_abandoned()
         disk_total, free = self.places.disk(loc)
         content.check_space(total, free, disk_total)
         batch = secrets.token_hex(8)
@@ -280,7 +292,7 @@ class MediaShelf:
         staging.mkdir(parents=True)
         with self.lock:
             self.batches[batch] = {"kind": kind, "item": item, "loc": loc, "total": total, "received": 0,
-                                   "files": set(), "dir": staging}
+                                   "files": set(), "dir": staging, "touched": self.clock()}
         return {"batch": batch, "item": item, "exists": "import" if self._in_use(item) else None}
 
     def _get(self, batch, pop=False):
@@ -296,7 +308,12 @@ class MediaShelf:
 
     def receive(self, batch, relpath, length, stream):
         b = self._get(batch)
+        b["touched"] = self.clock()
         name = file_name(b["kind"], b["item"], relpath)
+        if b["kind"] == "film" and _ext(name) in SUBS:  # a second untagged subtitle: .2.srt
+            stem, n = name[: -len(_ext(name)) - 1], 2
+            while name in b["files"]:
+                name, n = f"{stem}.{n}.{_ext(name)}", n + 1
         if name in b["files"]:
             raise Refused(f"{relpath}: a file of that name is already in this import")
         if b["received"] + length > b["total"]:

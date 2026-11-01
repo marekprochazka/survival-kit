@@ -261,6 +261,34 @@ class Shelf(unittest.TestCase):
         self.assertEqual(new.read_bytes(), MKV + b"newer")
         self.assertEqual(self.staging(), [])
 
+    def test_second_subtitle_gets_a_number(self):
+        b, r = self.film(files=(("x.mkv", MKV), ("a.srt", SRT), ("b.srt", SRT), ("c.cs.srt", SRT)))
+        folder = self.dev.root / "media/movies/The Kid (1921)"
+        self.assertEqual(sorted(os.listdir(folder)),
+                         ["The Kid (1921).2.srt", "The Kid (1921).cs.srt", "The Kid (1921).mkv", "The Kid (1921).srt"])
+
+    def test_abandoned_batch_is_dropped_after_30_minutes(self):
+        now = [1000.0]
+        self.shelf.clock = lambda: now[0]
+        old = self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, 100)
+        self.send(old["batch"], "x.mkv", MKV)
+        now[0] += 31 * 60
+        self.shelf.begin("film", {"title": "U", "year": ""}, self.dev, 100)
+        self.assertNotIn(f"media-{old['batch']}", self.staging())
+        with self.assertRaises(Refused) as e:
+            self.shelf.finish(old["batch"])
+        self.assertEqual(e.exception.status, 404)
+
+    def test_active_batch_is_kept(self):
+        now = [1000.0]
+        self.shelf.clock = lambda: now[0]
+        b = self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, 100)
+        now[0] += 20 * 60
+        self.send(b["batch"], "x.mkv", MKV)  # still uploading: touched
+        now[0] += 20 * 60
+        self.shelf.begin("film", {"title": "U", "year": ""}, self.dev, 100)
+        self.assertEqual(self.shelf.finish(b["batch"])["result"], "added")
+
     def test_batch_over_declared_size(self):
         b = self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, len(MKV) - 1)
         with self.assertRaises(Refused):
@@ -274,7 +302,7 @@ class Shelf(unittest.TestCase):
         b = self.shelf.begin("film", {"title": "T", "year": ""}, self.dev, 100)
         self.send(b["batch"], "x.mkv", MKV)
         with self.assertRaises(Refused):
-            self.send(b["batch"], "y.srt", SRT) or self.send(b["batch"], "z.srt", SRT)  # same stored name
+            self.send(b["batch"], "z.mkv", MKV)  # a second video: the same stored name
         with self.assertRaises(Refused):
             self.send(b["batch"], "x.exe", b"MZ")
         b2 = self.shelf.begin("film", {"title": "U", "year": ""}, self.dev, 100)

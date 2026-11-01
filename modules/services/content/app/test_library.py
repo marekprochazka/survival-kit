@@ -380,6 +380,37 @@ class MediaKind(Base):
         self.assertFalse((self.device.root / "media/movies/X").exists())
         self.assertTrue(newer.exists())
 
+    def test_notify_media_when_up(self):
+        """After Jellyfin starts (also at boot, when the library ran before it answered)."""
+        key = self.tmp / "api-key"
+        key.write_text("k\n")
+        answers, posts = [False, False, True], []
+
+        def health(url):
+            return answers.pop(0)
+
+        ok = library.notify_media_when_up(str(key), "http://jf", wait=30, health=health,
+                                          post=lambda u, h: posts.append(u), sleep=lambda s: None)
+        self.assertTrue(ok)
+        self.assertEqual(posts, ["http://jf/Library/Refresh"])
+        self.assertFalse(library.notify_media_when_up(str(key), "http://jf", wait=0, health=lambda u: False,
+                                                      post=lambda u, h: posts.append(u), sleep=lambda s: None))
+        # /health says yes while Jellyfin still answers 503 to everything else (startup)
+        tries = []
+
+        def busy_then_ok(u, h):
+            tries.append(u)
+            if len(tries) < 3:
+                raise OSError("HTTP Error 503: Service Unavailable")
+
+        self.assertTrue(library.notify_media_when_up(str(key), "http://jf", wait=30, health=lambda u: True,
+                                                     post=busy_then_ok, sleep=lambda s: None))
+        self.assertEqual(len(tries), 3)
+        calls = []
+        self.assertFalse(library.notify_media_when_up(str(self.tmp / "none"), "http://jf", wait=30,
+                                                      health=lambda u: calls.append(u), sleep=lambda s: None))
+        self.assertEqual(calls, [])  # no key (set up by hand): nothing to wait for
+
     def test_notify_media(self):
         key = self.tmp / "api-key"
         calls = []

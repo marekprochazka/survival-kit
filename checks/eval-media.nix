@@ -45,4 +45,13 @@ assert lib.assertMsg (lib.hasSuffix "/bin/survival-kit-media-setup" media.setupC
 assert lib.assertMsg (
   !(lib.elem "network-online.target" (unit.wants ++ unit.after))
 ) "a loopback-only service must not wait for the network";
+assert lib.assertMsg (
+  let
+    r = cfg.systemd.services.survival-kit-media-rescan;
+  in
+  lib.elem "jellyfin.service" r.wantedBy
+  && lib.elem "jellyfin.service" r.after
+  && lib.hasInfix "library.py notify-media" r.serviceConfig.ExecStart
+  && r.environment.MEDIA_KEY_FILE == media.keyFile
+) "after every Jellyfin start (boot too) the box asks for a rescan once it answers";
 pkgs.runCommand "eval-media" { } "touch $out"

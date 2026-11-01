@@ -68,7 +68,8 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_unit("nginx.service")
 
     with subtest("up, healthy, on the dashboard, nothing from other hosts"):
-        machine.wait_until_succeeds(f"${curl} -sf {JF}/health | grep -q Healthy", timeout=180)
+        # a first start is slow (and VM tests may share the CPU); the setup waits 5 min too
+        machine.wait_until_succeeds(f"${curl} -sf {JF}/health | grep -q Healthy", timeout=400)
         machine.succeed("${curl} -sf -o /dev/null https://deck/health/media")
         assert 'href="https://media.deck/"' in machine.succeed("${curl} -sf https://deck/"), "Media tile"
         page = machine.succeed(f"${curl} -sfL {JF}/web/")
@@ -137,8 +138,17 @@ pkgs.testers.runNixOSTest {
         policy["EnableVideoPlaybackTranscoding"] = True
         jf("POST", f"/Users/{uid}/Policy", token, policy)
         machine.succeed("systemctl restart jellyfin")
-        machine.wait_until_succeeds(f"${curl} -sf {JF}/health | grep -q Healthy", timeout=120)
+        machine.wait_until_succeeds(f"${curl} -sf {JF}/health | grep -q Healthy", timeout=400)
         assert jf("GET", f"/Users/{uid}", token)["Policy"]["EnableVideoPlaybackTranscoding"] is True
+
+    with subtest("a change while Jellyfin was down shows up after it starts (boot)"):
+        machine.succeed("systemctl stop jellyfin")
+        d = "/var/lib/survival-kit/data/media/movies/Offline (2019)"
+        machine.succeed(f"mkdir -p {shlex.quote(d)} && cp {FX}/film.mp4 {shlex.quote(d)}/Offline.mp4")
+        machine.succeed("systemctl restart survival-kit-library")  # its rescan request goes nowhere
+        machine.succeed("systemctl start jellyfin")
+        machine.wait_until_succeeds(f"${curl} -sf {JF}/health | grep -q Healthy", timeout=400)
+        wait_items(token, "Movie", present=["Offline (2019)"])  # file name matches: the folder titles it
 
     with subtest("deleting on the Content page removes it from Jellyfin"):
         quoted = urllib.parse.quote("movies/The Kid (1921)", safe="")

@@ -359,8 +359,35 @@ class Places:
         return self.setaside_dir if loc.id == "device" else loc.root.parent / "survival-kit-set-aside"
 
 
+def _healthy(url):
+    try:
+        with urllib.request.urlopen(f"{url}/health", timeout=5) as r:
+            return r.status == 200
+    except (OSError, ValueError):
+        return False
+
+
+def notify_media_when_up(key_file, url, wait=600, health=_healthy, post=_post, sleep=time.sleep):
+    """Once Jellyfin answers, ask it to rescan (run after every Jellyfin start: at boot the
+    library is rebuilt before Jellyfin is up, so drives changed while the box was off would
+    stay stale until its 12-hourly scan). No key → nothing to wait for."""
+    if not key_file or not url or not Path(key_file).exists():
+        return False
+    end = time.monotonic() + wait
+    # /health says "Healthy" while the rest still answers 503 (starting): retry the request too
+    while not (health(url) and notify_media(key_file, url, post)):
+        if time.monotonic() >= end:
+            print("library: Jellyfin didn't take the rescan; it scans by itself later", file=sys.stderr, flush=True)
+            return False
+        sleep(2)
+    return True
+
+
 def main():
     env = os.environ
+    if sys.argv[1:] == ["notify-media"]:  # survival-kit-media-rescan.service
+        notify_media_when_up(env.get("MEDIA_KEY_FILE"), env.get("MEDIA_URL"))
+        return 0
     ensure_tree(env["DATA_DIR"], DEVICE_NAME)
     locs = current_locations(env["DATA_DIR"], env["DRIVES_DIR"], env["REGISTRY"], env["DRIVE_STATE"])
     check = CheckCache(env["CACHE_FILE"], real_check(int(env.get("MAP_SCHEME", "4"))))

@@ -46,44 +46,71 @@ in
   config = lib.mkIf cfg.enable {
     services.jellyfin.enable = true; # openFirewall stays false: nginx is the way in
 
-    systemd.services.jellyfin = {
-      # upstream waits for network-online: pointless for a loopback-only service on an
-      # offline box (it would hold Media back when no network comes up)
-      wants = lib.mkForce [ ];
-      after = lib.mkForce [ ];
-      # a fresh Jellyfin listens on all interfaces; the box's starts on 127.0.0.1 only (nginx
-      # in front), no UPnP, no discovery broadcast. Written once: later it is the owner's file.
-      preStart = ''
-        if [ ! -e ${jf.configDir}/network.xml ]; then
-          mkdir -p ${jf.configDir}
-          cat > ${jf.configDir}/network.xml <<'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-          <InternalHttpPort>${toString port}</InternalHttpPort>
-          <EnableIPv6>false</EnableIPv6>
-          <LocalNetworkAddresses>
-            <string>127.0.0.1</string>
-          </LocalNetworkAddresses>
-          <EnableUPnP>false</EnableUPnP>
-          <AutoDiscovery>false</AutoDiscovery>
-          <EnableRemoteAccess>false</EnableRemoteAccess>
-        </NetworkConfiguration>
-        EOF
-        fi
-      '';
-      serviceConfig = {
-        # scans and sound conversion give way to the desktop (modules/base)
-        Slice = "background.slice";
-        IOSchedulingClass = "best-effort";
-        IOSchedulingPriority = 6;
-      };
-    };
+    systemd = {
+      services = {
+        jellyfin = {
+          # upstream waits for network-online: pointless for a loopback-only service on an
+          # offline box (it would hold Media back when no network comes up)
+          wants = lib.mkForce [ ];
+          after = lib.mkForce [ ];
+          # a fresh Jellyfin listens on all interfaces; the box's starts on 127.0.0.1 only (nginx
+          # in front), no UPnP, no discovery broadcast. Written once: later it is the owner's file.
+          preStart = ''
+            if [ ! -e ${jf.configDir}/network.xml ]; then
+              mkdir -p ${jf.configDir}
+              cat > ${jf.configDir}/network.xml <<'EOF'
+            <?xml version="1.0" encoding="utf-8"?>
+            <NetworkConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+              <InternalHttpPort>${toString port}</InternalHttpPort>
+              <EnableIPv6>false</EnableIPv6>
+              <LocalNetworkAddresses>
+                <string>127.0.0.1</string>
+              </LocalNetworkAddresses>
+              <EnableUPnP>false</EnableUPnP>
+              <AutoDiscovery>false</AutoDiscovery>
+              <EnableRemoteAccess>false</EnableRemoteAccess>
+            </NetworkConfiguration>
+            EOF
+            fi
+          '';
+          serviceConfig = {
+            # scans and sound conversion give way to the desktop (modules/base)
+            Slice = "background.slice";
+            IOSchedulingClass = "best-effort";
+            IOSchedulingPriority = 6;
+          };
+        };
 
-    # after every import, delete or drive change the library is rebuilt: then it asks
-    # Jellyfin to rescan (no file watching — it misses changes behind links and on drives)
-    systemd.services.survival-kit-library.environment = {
-      MEDIA_KEY_FILE = cfg.keyFile;
-      MEDIA_URL = url;
+        # after every import, delete or drive change the library is rebuilt: then it asks
+        # Jellyfin to rescan (no file watching — it misses changes behind links and on drives)
+        survival-kit-library.environment = {
+          MEDIA_KEY_FILE = cfg.keyFile;
+          MEDIA_URL = url;
+        };
+
+        # at boot the library is rebuilt before Jellyfin answers: after every Jellyfin start, ask
+        # once more (drives changed while the box was off would wait for its 12-hourly scan)
+        survival-kit-media-rescan = {
+          description = "Ask Media (Jellyfin) to rescan once it has started";
+          wantedBy = [ "jellyfin.service" ];
+          after = [ "jellyfin.service" ];
+          partOf = [ "jellyfin.service" ];
+          environment = {
+            MEDIA_KEY_FILE = cfg.keyFile;
+            MEDIA_URL = url;
+            PYTHONUNBUFFERED = "1";
+          };
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${pkgs.python3}/bin/python3 ${../content/app}/library.py notify-media";
+            # root only to read the key; nothing else
+            ProtectSystem = "strict";
+            ProtectHome = true;
+            PrivateTmp = true;
+            NoNewPrivileges = true;
+          };
+        };
+      };
     };
 
     environment.systemPackages = [ setup ];
