@@ -30,4 +30,4 @@ address — e.g. **`anna@vault.deck`** for Passwords, **`anna@files.deck`** for 
 The wiki ships with: the **Arch Wiki** (general Linux help), **man pages**,
 **Nix**, **bash** and **git** references, and this manual.
 
-The maps were cut from OpenStreetMap data of **2026-10-27** (© OpenStreetMap contributors).
+The maps were cut from OpenStreetMap data of **@MAPS_DATE@** (© OpenStreetMap contributors).

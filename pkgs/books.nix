@@ -8,6 +8,13 @@
   zim-tools,
 }:
 let
+  # Placeholders filled at build time — one source instead of a hand copy in the pages.
+  # @MAPS_DATE@: the date of the built-in maps (reading .date doesn't fetch the map files)
+  mapsDate =
+    let
+      d = (import ../modules/services/maps/builtins.nix { pkgs = null; }).date; # YYYYMMDD
+    in
+    "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
   mkBook =
     {
       name, # book name = URL: https://wiki.<domain>/content/<name>
@@ -28,7 +35,7 @@ let
         cp ${../manual/icon.png} site/icon.png
         for md in ${src}/*.md; do
           page=$(basename "$md" .md)
-          { cat ${src}/_header.html; lowdown -thtml "$md"; cat ${src}/_footer.html; } > "site/$page.html"
+          { cat ${src}/_header.html; sed 's/@MAPS_DATE@/${mapsDate}/g' "$md" | lowdown -thtml; cat ${src}/_footer.html; } > "site/$page.html"
         done
         zimwriterfs --name ${name} --title "${title}" --description "${description}" \
           --creator survival-kit --publisher survival-kit --language eng \

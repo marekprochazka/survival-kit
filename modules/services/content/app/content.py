@@ -7,6 +7,7 @@ HTTP, Kiwix or Ollama. server.py maps the web API onto it. Standard library only
 import os
 import re
 import tempfile
+import unicodedata
 from pathlib import Path
 
 GIB = 1024**3
@@ -81,7 +82,11 @@ def map_name(filename):
     The name is also how the map page tells maps apart, and an import replaces a
     built-in map of the same name (world, central-europe, czechia).
     """
-    stem = re.sub(r"[^a-z0-9._-]+", "-", _stem(filename, ".pmtiles").lower()).lstrip(".")
+    # accented Latin letters keep their base letter ("Österreich" → "osterreich", not
+    # "-sterreich"): NFKD splits "Ö" into "O" + a combining mark, which is dropped
+    decomposed = unicodedata.normalize("NFKD", _stem(filename, ".pmtiles"))
+    plain = "".join(c for c in decomposed if not unicodedata.combining(c))
+    stem = re.sub(r"[^a-z0-9._-]+", "-", plain.lower()).lstrip(".")
     if not stem.strip("-._"):
         raise Refused("this file name can't be used for a map")
     if len(stem) > MAX_NAME:

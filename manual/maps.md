@@ -44,8 +44,8 @@ Protomaps world map — it only downloads that area:
 - `YYYYMMDD`: a recent date (the daily builds are kept for about a week; try yesterday's).
   These maps are **Protomaps version 4** — what this box draws. A map made for another
   version is refused on import.
-- `--bbox=west,south,east,north`: the area in degrees (find the numbers by hovering in the
-  grid, or on <https://boundingbox.klokantech.com>, format "CSV").
+- `--bbox=west,south,east,north`: the area in degrees (turn on **Grid** and read the
+  numbers off its labelled lines, or use <https://boundingbox.klokantech.com>, format "CSV").
 - `--maxzoom`: how detailed. Rough sizes:
 
 | Area | Max zoom | Shows | Size |

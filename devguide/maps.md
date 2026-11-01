@@ -72,7 +72,8 @@ maps in the store and keeps them when it rebuilds):
 1. Run `utils/fetch-maps` from the repository root (needs internet, ~400 MB). It takes the
    newest daily build, cuts the three maps into `tmp/maps/`, adds them to the Nix store
    (`nix-store --add-fixed sha256`) and rewrites `modules/services/maps/builtins.nix` with
-   the build date and the new hashes.
+   the build date and the new hashes. The manual's map date (`@MAPS_DATE@` in its pages)
+   is filled from that file when the books are built, so it follows by itself.
 2. Commit `builtins.nix`.
 
 On a machine where the maps are not in the store, building the system or the ISO stops with

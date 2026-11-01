@@ -282,6 +282,14 @@ class MapNames(unittest.TestCase):
         with self.assertRaises(Refused):
             content.map_name("a" * 300 + ".pmtiles")
 
+    def test_map_name_accented_letters_kept(self):
+        # "Österreich" used to become "-sterreich"
+        self.assertEqual(content.map_name("Österreich.pmtiles"), "osterreich.pmtiles")
+        self.assertEqual(content.map_name("Île-de-France.pmtiles"), "ile-de-france.pmtiles")
+        self.assertEqual(content.map_name("Česko z12.pmtiles"), "cesko-z12.pmtiles")
+        with self.assertRaises(Refused):  # no Latin letters at all: a clear refusal
+            content.map_name("Ελλάδα.pmtiles")
+
 
 class MapsTest(unittest.TestCase):
     def setUp(self):

@@ -34,6 +34,7 @@ let
     eval-files = import ./eval-files.nix args;
     eval-language = import ./eval-language.nix args;
     eval-inventory = import ./eval-inventory.nix args;
+    manual-mapdate = import ./manual-mapdate.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
