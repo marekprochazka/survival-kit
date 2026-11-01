@@ -16,7 +16,7 @@ from content import Refused
 
 FORMAT = 1  # the tree's layout version, written into the marker
 MARKER = "survival-kit.json"
-DIRS = ("wiki", "maps", "models", "translate", "dict", ".incoming")
+DIRS = ("wiki", "maps", "models", "translate", "dict", "media", ".incoming")
 # kind → (file extension, the clean name a file is known by)
 KINDS = {
     "wiki": (".zim", content.wiki_name_plain),

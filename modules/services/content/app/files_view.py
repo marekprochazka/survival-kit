@@ -2,7 +2,7 @@
 
 File Browser shows /var/lib/survival-kit-files/view; signing up creates view/users/<account>/.
 That folder holds one folder per location (this device, each connected added drive) bound
-read-write to <location>/files/<account>, and Library/ with the box's books and maps bound
+read-write to <location>/files/<account>, and Library/ with the box's books, maps and media bound
 read-only. Bind mounts, not symlinks: File Browser refuses links that leave a person's space.
 Run as a program (survival-kit-files-view.service, at boot, after a sign-up, after every
 drive change): bring the mounts in line with the accounts and locations now. Standard
@@ -22,7 +22,7 @@ from drives import parse_mounts, write_json
 from library import current_locations
 
 RESERVED = ("Library", "Built-in", "This device")
-KINDS = ("wiki", "maps")
+KINDS = ("wiki", "maps", "media")
 
 
 # --- the layout -----------------------------------------------------------------------
@@ -55,7 +55,7 @@ def folder_names(locs):
 
 def usable(loc):
     """A location is used only when its folders are real folders. A drive is anyone's: a
-    survival-kit/, files/, wiki/ or maps/ that is a link (e.g. to /var/lib/survival-kit)
+    survival-kit/, files/, wiki/, maps/ or media/ that is a link (e.g. to /var/lib/survival-kit)
     would make root hand that place out."""
     return not any(os.path.islink(p) for p in (loc.root, *(loc.root / d for d in ("files", *KINDS))))
 

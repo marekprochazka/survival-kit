@@ -57,6 +57,11 @@ class WantedTest(unittest.TestCase):
         self.assertEqual(w[str(self.home / "Library/This device/wiki")], (str(self.data / "wiki"), True))
         self.assertEqual(w[str(self.home / "Library/Big/maps")], (str(self.tree / "maps"), True))
 
+    def test_wanted_includes_media(self):
+        w = self.want()
+        self.assertEqual(w[str(self.home / "Library/This device/media")], (str(self.data / "media"), True))
+        self.assertEqual(w[str(self.home / "Library/Big/media")], (str(self.tree / "media"), True))
+
     def test_wanted_builtins_per_file(self):
         store, farm = Path(self.tmp.name) / "store", Path(self.tmp.name) / "farm"
         store.mkdir()

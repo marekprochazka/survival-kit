@@ -2,9 +2,10 @@
 
 Services don't know about locations: they read /var/lib/survival-kit/library/<kind>,
 a folder of symlinks to the copy in use of every book, map, translation model and
-dictionary (kinds: wiki, maps, translate, dict). Files already on a
-location get the same checks as uploads; a failing one is "invalid", the older copy of a
-name on two locations is a "duplicate" — both stay where they are, not in use, until
+dictionary (kinds: wiki, maps, translate, dict) and of every media folder — film, series
+season, album (kind media, see media.py). Files already on a location get the same checks as
+uploads; a failing one is "invalid" (media is found by layout only, never invalid), the
+older copy of a name on two locations is a "duplicate" — both stay where they are, not in use, until
 auto-resolve (set_aside) moves them out of the tree. Standard library only.
 
 Run as a program (survival-kit-library.service, at boot and after every change): rebuild
@@ -18,14 +19,16 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import media
 from content import Refused
 from locations import Location, ensure_tree, scan
 
 DEVICE_NAME = "This device"
-KINDS_ALL = ("wiki", "maps", "translate", "dict")
+KINDS_ALL = ("wiki", "maps", "translate", "dict", "media")
 
 
 # --- what is in use -------------------------------------------------------------------
@@ -48,10 +51,12 @@ def resolve(locs, kind, check, protected):
     entries = []
     for loc in sorted(locs, key=lambda loc: loc.order):
         try:
-            found = scan(loc, kind)
+            found = media.scan_items(loc) if kind == "media" else scan(loc, kind)
             for e in found:
                 e.update(kind=kind, order=loc.order, date=None, reason=None)
-                if e["refusal"]:
+                if kind == "media":  # layout only: never opened, the newest folder wins
+                    e.update(status="in_use", date=time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(e["mtime"])))
+                elif e["refusal"]:
                     e.update(status="invalid", reason=e["refusal"])
                 elif kind == "wiki" and e["name"][:-4] in protected:
                     e.update(status="invalid", reason="the box's own manual can't be replaced")
@@ -157,6 +162,34 @@ def _readable(path, bits):
         pass
 
 
+def _readable_tree(folder):
+    """A media folder and everything in it readable for all (Jellyfin runs unprivileged);
+    links are not followed."""
+    _readable(folder, 0o555)
+    for top, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(top, d))]
+        for d in dirs:
+            _readable(Path(top) / d, 0o555)
+        for f in files:
+            if not os.path.islink(os.path.join(top, f)):
+                _readable(Path(top) / f, 0o444)
+
+
+def _open_up(e):
+    """Make an in-use entry reachable for the unprivileged services: the item itself and the
+    folders above it, on a drive up to and including the drive's root."""
+    if e["kind"] == "media":
+        depth = e["name"].count("/") + 1  # movies/X → X, movies, media
+        _readable_tree(e["path"])
+    else:
+        depth = 1
+        _readable(e["path"], 0o444)
+    parents = e["path"].parents
+    top = depth + 1 if e["location"] != "device" else depth - 1  # drive: + survival-kit/, its root
+    for n in range(0, top + 1):
+        _readable(parents[n], 0o555)
+
+
 def build_index(entries_by_kind, library):
     """Swap `library` (a symlink) to a fresh folder of links to the in-use copies."""
     library = Path(library)
@@ -166,13 +199,11 @@ def build_index(entries_by_kind, library):
         (new / kind).mkdir(parents=True)
         for e in entries:
             if e["status"] == "in_use":
-                # kiwix-serve and nginx run unprivileged: they must reach the file
-                if e["location"] != "device":
-                    _readable(e["path"].parents[2], 0o555)  # the drive's root
-                    _readable(e["path"].parents[1], 0o555)  # its survival-kit/
-                _readable(e["path"].parent, 0o555)
-                _readable(e["path"], 0o444)
-                os.symlink(e["path"], new / kind / e["name"])
+                # kiwix-serve, nginx and Jellyfin run unprivileged: they must reach it
+                _open_up(e)
+                link = new / kind / e["name"]
+                link.parent.mkdir(parents=True, exist_ok=True)  # media: movies/, shows/<series>/
+                os.symlink(e["path"], link)
     new.chmod(0o755)
     if library.is_dir() and not library.is_symlink():
         shutil.rmtree(library)  # a plain folder from before: replaced once
@@ -191,15 +222,20 @@ def set_aside(loc, entries, today, root):
     """Move loc's invalid and duplicate files to root/<today>/<kind>/ — never delete.
 
     root is on the same filesystem as the location (a rename, no copy). A name already
-    there gets -1, -2, … Returns the file names moved.
+    there gets -1, -2, … Media folders keep their place in the layout
+    (root/<today>/media/movies/<name>). Returns the file (or folder) names moved.
     """
     moved = []
     for e in entries:
         if e["location"] != loc.id or e["status"] not in ("invalid", "duplicate"):
             continue
         day = Path(root) / today / e["kind"]
+        if e["kind"] == "media":
+            day = day / e["name"].rpartition("/")[0]  # movies, shows/<series>, music
+            stem, dot, ext = e["file"], "", ""
+        else:
+            stem, dot, ext = e["file"].rpartition(".")
         day.mkdir(parents=True, exist_ok=True)
-        stem, dot, ext = e["file"].rpartition(".")
         dest, n = day / e["file"], 0
         while dest.exists():
             n += 1
@@ -238,7 +274,29 @@ def current_locations(data_dir, drives_dir, registry_file, drive_state_file, pre
 
 def _state_entry(e):
     keep = ("name", "file", "size", "mtime", "location", "status", "reason", "date")
-    return {k: e[k] for k in keep} | {"path": str(e["path"])}
+    return {k: e[k] for k in keep} | {"path": str(e["path"])} | ({"type": e["type"]} if "type" in e else {})
+
+
+def _post(url, headers):
+    req = urllib.request.Request(url, data=b"", headers=headers, method="POST")
+    urllib.request.urlopen(req, timeout=5).close()
+
+
+def notify_media(key_file, url, post=_post):
+    """Ask Jellyfin to rescan its libraries with the box's key (best effort: no key — the
+    owner set Jellyfin up by hand — or Jellyfin down → False, never an error)."""
+    if not key_file or not url:
+        return False
+    try:
+        key = Path(key_file).read_text().strip()
+    except OSError:
+        return False
+    try:
+        post(f"{url}/Library/Refresh", {"Authorization": f'MediaBrowser Token="{key}"'})
+    except (OSError, ValueError) as err:
+        print(f"library: Jellyfin rescan not asked ({err})", file=sys.stderr, flush=True)
+        return False
+    return True
 
 
 def write_state(entries_by_kind, path):
@@ -299,6 +357,7 @@ def main():
     build_index(entries, env["LIBRARY_DIR"])
     check.save()
     write_state(entries, env["STATE_FILE"])
+    notify_media(env.get("MEDIA_KEY_FILE"), env.get("MEDIA_URL"))
     for kind, v in entries.items():
         bad = [e for e in v if e["status"] != "in_use"]
         print(f"library: {kind}: {len(v) - len(bad)} in use, {len(bad)} not in use", flush=True)

@@ -278,3 +278,92 @@ class LanguageKinds(Base):
         library.build_index(entries, lib)
         self.assertEqual(os.listdir(lib / "translate"), ["en_cs.argosmodel"])
         self.assertEqual(os.listdir(lib / "dict"), ["eng-ces.dictd.tar.xz"])
+
+
+class MediaKind(Base):
+    def item(self, loc, name, mtime=None, files=("a.mkv",)):
+        folder = loc.root / "media" / name
+        for f in files:
+            (folder / f).parent.mkdir(parents=True, exist_ok=True)
+            (folder / f).write_bytes(b"x")
+            if mtime:
+                os.utime(folder / f, (mtime, mtime))
+        if mtime:
+            os.utime(folder, (mtime, mtime))
+        return folder
+
+    def resolve(self):
+        return library.resolve([self.device, self.drive], "media", fake_check({}, bad=("a.mkv",)), PROTECTED)
+
+    def test_resolve_media_newer_wins(self):
+        self.item(self.device, "movies/X", mtime=1000)
+        self.item(self.drive, "movies/X", mtime=2000)
+        self.assertEqual(self.status(self.resolve()),
+                         {("device", "movies/X"): "duplicate", ("u-1", "movies/X"): "in_use"})
+
+    def test_resolve_media_never_invalid(self):
+        self.item(self.device, "movies/Odd: Name", files=("a.mkv", "x.nfo", "Sample/s.mkv"))
+        [e] = self.resolve()  # the check would call a.mkv bad — media isn't checked by content
+        self.assertEqual((e["status"], e["type"]), ("in_use", "film"))
+
+    def test_resolve_media_series_split(self):
+        self.item(self.device, "shows/S/Season 01")
+        self.item(self.drive, "shows/S/Season 02")
+        self.assertEqual(self.status(self.resolve()),
+                         {("device", "shows/S/Season 01"): "in_use", ("u-1", "shows/S/Season 02"): "in_use"})
+
+    def test_build_index_media(self):
+        film = self.item(self.drive, "movies/X")
+        s1 = self.item(self.device, "shows/S/Season 01")
+        s2 = self.item(self.drive, "shows/S/Season 02")
+        album = self.item(self.device, "music/A", files=("01.flac",))
+        lib = self.tmp / "library"
+        library.build_index({"media": self.resolve()}, lib)
+        m = lib / "media"
+        self.assertTrue((m / "movies/X").is_symlink())
+        self.assertEqual((m / "movies/X").resolve(), film.resolve())
+        self.assertTrue((m / "shows/S").is_dir() and not (m / "shows/S").is_symlink())
+        self.assertEqual((m / "shows/S/Season 01").resolve(), s1.resolve())
+        self.assertEqual((m / "shows/S/Season 02").resolve(), s2.resolve())
+        self.assertEqual((m / "music/A").resolve(), album.resolve())
+
+    def test_build_index_media_readable_on_drive(self):
+        film = self.item(self.drive, "movies/X", files=("deep/a.mkv",))
+        (film / "deep/a.mkv").chmod(0o600)
+        (film / "deep").chmod(0o700)
+        film.chmod(0o700)
+        for d in [film.parent, film.parent.parent, self.drive.root, self.tmp]:
+            d.chmod(0o700)
+        self.addCleanup(self.tmp.chmod, 0o755)
+        library.build_index({"media": self.resolve()}, self.tmp / "library")
+        self.assertEqual((film / "deep/a.mkv").stat().st_mode & 0o777, 0o644)
+        for d in [film / "deep", film, film.parent, film.parent.parent, self.drive.root, self.tmp]:
+            self.assertEqual(d.stat().st_mode & 0o777, 0o755, d)
+
+    def test_set_aside_media_folder(self):
+        self.item(self.device, "movies/X", mtime=1000)
+        newer = self.item(self.drive, "movies/X", mtime=2000)
+        root = self.tmp / "set-aside"
+        earlier = root / "2026-11-01/media/movies/X"
+        earlier.mkdir(parents=True)
+        moved = library.set_aside(self.device, self.resolve(), "2026-11-01", root)
+        self.assertEqual(moved, ["X"])
+        self.assertTrue((root / "2026-11-01/media/movies/X-1/a.mkv").exists())
+        self.assertFalse((self.device.root / "media/movies/X").exists())
+        self.assertTrue(newer.exists())
+
+    def test_notify_media(self):
+        key = self.tmp / "api-key"
+        calls = []
+        self.assertFalse(library.notify_media(str(key), "http://127.0.0.1:8096", post=lambda u, h: calls.append((u, h))))
+        self.assertEqual(calls, [])
+        key.write_text("k123\n")
+        self.assertTrue(library.notify_media(str(key), "http://127.0.0.1:8096", post=lambda u, h: calls.append((u, h))))
+        self.assertEqual(calls, [("http://127.0.0.1:8096/Library/Refresh",
+                                  {"Authorization": 'MediaBrowser Token="k123"'})])
+
+        def down(u, h):
+            raise OSError("connection refused")
+
+        self.assertFalse(library.notify_media(str(key), "http://127.0.0.1:8096", post=down))
+        self.assertFalse(library.notify_media(None, None))

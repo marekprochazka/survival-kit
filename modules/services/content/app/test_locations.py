@@ -28,6 +28,10 @@ class Tree(unittest.TestCase):
         for d in ["translate", "dict"]:
             self.assertTrue((self.root / d).is_dir(), d)
 
+    def test_ensure_tree_has_media(self):
+        locations.ensure_tree(self.root, "Big")
+        self.assertTrue((self.root / "media").is_dir())
+
     def test_ensure_tree_keeps_existing_marker(self):
         self.root.mkdir()
         (self.root / "survival-kit.json").write_text('{"format": 1, "name": "Old"}')
