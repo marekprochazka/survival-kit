@@ -65,6 +65,9 @@ let
       # File Browser locks its database while it runs: stop it, always start it again
       systemctl stop filebrowser.service
       trap 'systemctl start filebrowser.service' EXIT
+      # --password is visible in ps for a moment; `users update` reads it only from the flag
+      # (not from FB_PASSWORD). Acceptable on a box only its household uses — revisit with
+      # the password work before hub mode (export → bcrypt → `users import --overwrite`).
       runuser -u ${fb.user} -- filebrowser -d ${db} users update "$name" --password "$pw"
       echo "survival-kit-files: the password of $name is changed" >&2
     '';
@@ -183,12 +186,24 @@ in
       healthPath = "/health";
     };
 
-    # uploads of any size, streamed to File Browser instead of buffered by nginx
-    services.nginx.virtualHosts."files.${config.survivalKit.web.domain}".extraConfig = ''
-      client_max_body_size 0;
-      proxy_request_buffering off;
-      proxy_read_timeout 3600s;
-      proxy_send_timeout 3600s;
-    '';
+    services.nginx.virtualHosts."files.${config.survivalKit.web.domain}" = {
+      # Library/ is read-only (bind mounts): refuse writes with 403 here, before File Browser
+      # tries and answers 500 "read-only file system". Reading and downloading pass through.
+      locations."~ ^/api/(resources|tus)/Library(/|$)" = {
+        proxyPass = "http://127.0.0.1:${toString port}";
+        extraConfig = ''
+          if ($request_method !~ ^(GET|HEAD)$) { return 403; }
+        '';
+      };
+      extraConfig = ''
+        # a copy/move into Library/ names it only in ?destination=
+        if ($arg_destination ~* "^(/|%2F)Library(/|%2F|$)") { return 403; }
+        # uploads of any size, streamed to File Browser instead of buffered by nginx
+        client_max_body_size 0;
+        proxy_request_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+      '';
+    };
   };
 }

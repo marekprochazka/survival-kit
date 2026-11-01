@@ -98,9 +98,16 @@ pkgs.testers.runNixOSTest {
         assert code("GET", f"/raw/users/{ANNA}/This device/notes.txt", ben) != "200"
 
     with subtest("Library is read-only, and so is the top of a space"):
-        # refused by the OS (read-only bind): File Browser answers 500 "read-only file system"
-        assert code("POST", "/resources/Library/This device/wiki/x.zim", anna, "x") == "500"
-        assert code("DELETE", "/resources/Library/This device/wiki/near-test.zim", anna) == "500"
+        # read-only bind; nginx answers 403 before File Browser would fail with a 500
+        assert code("POST", "/resources/Library/This device/wiki/x.zim", anna, "x") == "403"
+        assert code("DELETE", "/resources/Library/This device/wiki/near-test.zim", anna) == "403"
+        # a copy into Library names it only in the destination parameter
+        assert code("POST", "/resources/This device/c.txt", anna, "x") == "200"
+        copy = "/resources/This device/c.txt?action=copy&destination=%2FLibrary%2Fc.txt&override=false"
+        assert machine.succeed(
+            f"${curl} -s -o /dev/null -w '%{{http_code}}' -X PATCH -H 'X-Auth: {anna}' '{FB}{copy.replace(' ', '%20')}'"
+        ).strip() == "403"
+        assert code("GET", "/resources/Library/This device/wiki", anna) == "200"  # reading still works
         machine.succeed(f"test -f {DATA}/wiki/near-test.zim")
         machine.fail(f"test -e {DATA}/wiki/x.zim")
         assert code("POST", "/resources/Library/new.txt", anna, "x") == "403"  # Library/ itself is root's

@@ -25,9 +25,11 @@ point outside a person's space (tested 2026-10-30). The built-in folders are lin
 into the Nix store, so they are bound file by file. People's files live in the content tree
 next to `wiki/` and `maps/` — on a drive in its `survival-kit/files/` folder, so they travel
 with the drive. The top of a space is root's (0755): File Browser can't drop a file there
-(403); people choose a location folder. A write into the Library hits the read-only mount:
-the kernel refuses it even for root, and File Browser answers **500** "read-only file
-system" (it maps only permission errors to 403).
+(403); people choose a location folder. The Library is a read-only mount: the kernel
+refuses writes even for root. File Browser would answer those with **500** "read-only file
+system" (it maps only permission errors to 403), so nginx answers **403** first: a regex
+location for `/api/(resources|tus)/Library…` lets only GET/HEAD through, and a copy/move
+whose `?destination=` points into `/Library` is refused at the server level.
 
 **Links on a drive are never followed by root.** A drive is anyone's: a `survival-kit/`,
 `files/`, `wiki/` or `maps/` that is a symlink (e.g. to `/var/lib/survival-kit`) would make
