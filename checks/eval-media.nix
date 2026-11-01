@@ -54,4 +54,9 @@ assert lib.assertMsg (
   && lib.hasInfix "library.py notify-media" r.serviceConfig.ExecStart
   && r.environment.MEDIA_KEY_FILE == media.keyFile
 ) "after every Jellyfin start (boot too) the box asks for a rescan once it answers";
+assert lib.assertMsg (
+  unit.serviceConfig.LimitCORE == 0
+  && unit.unitConfig.StartLimitBurst == 5
+  && unit.unitConfig.StartLimitIntervalSec == 600
+) "Jellyfin refuses to start below 2 GiB free: no core dumps (~180 MB each) and a restart limit";
 pkgs.runCommand "eval-media" { } "touch $out"

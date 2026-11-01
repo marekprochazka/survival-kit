@@ -73,9 +73,17 @@ in
             EOF
             fi
           '';
+          # …and no endless restarts then: five tries in 10 min, then it stays down (red dot)
+          unitConfig = {
+            StartLimitIntervalSec = 600;
+            StartLimitBurst = 5;
+          };
           serviceConfig = {
             # scans and sound conversion give way to the desktop (modules/base)
             Slice = "background.slice";
+            # Jellyfin refuses to start with less than 2 GiB free where its data lives
+            # (hard-coded in 10.11): no ~180 MB core dump per attempt filling the disk further
+            LimitCORE = 0;
             IOSchedulingClass = "best-effort";
             IOSchedulingPriority = 6;
           };

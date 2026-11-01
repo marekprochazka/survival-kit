@@ -14,6 +14,8 @@ pkgs.testers.runNixOSTest {
     {
       imports = [ (import ./host-node.nix { inherit inputs; }) ];
       survivalKit.firstBoot.enable = lib.mkForce true;
+      # Media (Jellyfin) refuses to start with less than 2 GiB free (the default disk is 1 GB)
+      virtualisation.diskSize = 4096;
     };
   testScript = ''
     with subtest("prompt on tty1 before the desktop"):
@@ -37,10 +39,23 @@ pkgs.testers.runNixOSTest {
         machine.send_chars("s3cret-pass\n")
 
     with subtest("desktop starts, logged in as deck with the display name"):
-        machine.wait_for_unit("display-manager.service")
+        try:
+            machine.wait_for_unit("display-manager.service", timeout=600)
+        except Exception:
+            print("tty1 was showing:\n" + machine.get_tty_text("1"))  # e.g. a Media note
+            raise
         machine.wait_until_succeeds("pgrep -u deck -f xfce4-session", timeout=120)
         assert "Test Person" in machine.succeed("getent passwd deck")
         machine.succeed("test -e /var/lib/survival-kit/firstboot-done")
+
+    with subtest("Media's owner has the same name and password"):
+        machine.succeed("test -s /var/lib/survival-kit/media/api-key")
+        machine.succeed(
+            "curl -sf -X POST -H 'Content-Type: application/json'"
+            " -H 'Authorization: MediaBrowser Client=\"t\", Device=\"vm\", DeviceId=\"fb\", Version=\"1\"'"
+            " --data-binary '{\"Username\": \"Test Person\", \"Pw\": \"s3cret-pass\"}'"
+            " http://127.0.0.1:8096/Users/AuthenticateByName"
+        )
 
     with subtest("the password works: real console login on tty2"):
         machine.succeed("systemctl start getty@tty2.service")

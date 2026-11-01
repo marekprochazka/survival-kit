@@ -8,6 +8,12 @@ For the wiki: `kiwix-serve` and `kiwix-library`; for Passwords: `vaultwarden`.
 `sudo systemctl restart kiwix-library` and check
 `journalctl -u kiwix-library` for "skipping unreadable".
 
+**The Media dot is red.** Media (Jellyfin) needs **at least 2 GB free** on this device and
+won't start with less. Free some space (delete things you don't need on the
+[Content](content.html) page, or move big films to an added drive), then
+`sudo systemctl restart jellyfin`. If it was never set up, see
+[Media](media.html#if-media-isnt-set-up).
+
 **Logging in on the text console.** The account is called `deck`; use the
 password you chose at the first start.
 

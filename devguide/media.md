@@ -46,7 +46,10 @@ First boot (see [First boot](firstboot.html)) pipes the owner's name and passwor
 
 1. waits (up to 5 min each, a first start on an old laptop is slow) for the index folders
    `movies/ shows/ music/` and for Jellyfin to answer (`GET /System/Info/Public`, a dot
-   every 10 s); from then on one **overall limit** of 5 min bounds every call. If
+   every 10 s); from then on one **overall limit** of 5 min bounds every call. Each call is
+   retried while Jellyfin can't take it yet: **503** while it is still starting (even
+   though `/System/Info/Public` already answers — at first boot the setup always lands in
+   that window) and **no connection** for a moment after its network settings change. If
    `StartupWizardCompleted` is true **and** the key file exists it changes nothing
    (**exit 2**); wizard done but no key = a setup that stopped half-way: it **resumes** —
    skips the wizard, signs in with the given name and password (another password → a clear
@@ -86,6 +89,11 @@ account for this** (e.g. not open Media to the network before setup is complete)
   discovery, no remote access) — a fresh Jellyfin would listen on every interface. The
   firewall stays closed for 8096 either way; nginx is the way in.
 - Upstream orders Jellyfin after `network-online.target`; cleared (offline box).
+- **Jellyfin 10.11 refuses to start with less than 2 GiB free** where its data lives
+  (`/var/lib/jellyfin`; hard-coded in its `StorageHelper`, not a setting). Then it would
+  crash, restart and write a ~180 MB core dump each time: `LimitCORE = 0` and a start limit
+  (5 tries in 10 min, then it stays down — a red dot). The content manager always keeps
+  ≥ 2 GiB free on the device, so imports alone don't trigger it.
 - `Slice = background.slice` (see [Base](base.html)) and best-effort I/O 6: scans and sound
   conversion give way to the desktop.
 - Memory: about **155 MB** after scanning a few items (VM test).

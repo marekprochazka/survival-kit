@@ -22,12 +22,13 @@ OPTIONS = {  # what Jellyfin 10.11 offers per library type (captured from a real
 
 
 class FakeJellyfin:
-    def __init__(self, wizard_done=False, fail=None, user=("jellyfin", ""), libraries=()):
+    def __init__(self, wizard_done=False, fail=None, user=("jellyfin", ""), libraries=(), starting=0):
         self.calls = []  # (method, path, query, body, auth)
         self.wizard_done = wizard_done
         self.fail = fail  # a path that answers 500
         self.user = user  # (name, password) Jellyfin signs in
         self.libraries = list(libraries)
+        self.starting = starting  # answers 503 to this many calls (all but /System/Info/Public)
         self.policy = {"IsAdministrator": True, "EnableVideoPlaybackTranscoding": True,
                        "EnableAudioPlaybackTranscoding": True, "EnablePlaybackRemuxing": True,
                        "AuthenticationProviderId": "a", "PasswordResetProviderId": "p"}
@@ -58,6 +59,9 @@ class FakeJellyfin:
                 p = url.path
                 if p == fake.fail:
                     return self.answer(500, {"error": "boom"})
+                if fake.starting and p != "/System/Info/Public":
+                    fake.starting -= 1
+                    return self.answer(503)
                 if p == "/System/Info/Public":
                     return self.answer(200, {"version": "10.11.11", "startupWizardCompleted": fake.wizard_done})
                 if p == "/Startup/User" and method == "POST":
@@ -195,6 +199,31 @@ class Setup(unittest.TestCase):
             self.run_setup(fake)
         self.assertIn("name or password", str(e.exception))
         self.assertFalse(self.key.exists())
+
+    def test_waits_while_jellyfin_is_still_starting(self):
+        """At first boot Jellyfin answers /System/Info/Public, then 503 to the rest for a while."""
+        import time  # noqa: PLC0415
+
+        fake = FakeJellyfin(starting=3)
+        self.assertEqual(self.run_setup(fake, deadline=time.monotonic() + 60), "Anna")
+        self.assertEqual(self.key.read_text().strip(), "k-123")
+
+    def test_retries_while_jellyfin_rebinds(self):
+        """After its network settings change, Jellyfin re-binds: a moment of 'connection refused'."""
+        import time  # noqa: PLC0415
+
+        api = setup.Api("http://127.0.0.1:9", deadline=time.monotonic() + 30)
+        tries = []
+
+        def once(*a):
+            tries.append(1)
+            if len(tries) < 3:
+                raise setup.SetupError("Jellyfin can't be reached (refused)")
+            return {"ok": True}
+
+        api._once = once
+        self.assertEqual(api.call("GET", "/x"), {"ok": True})
+        self.assertEqual(len(tries), 3)
 
     def test_overall_deadline(self):
         import time  # noqa: PLC0415

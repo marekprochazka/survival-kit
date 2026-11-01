@@ -58,10 +58,23 @@ class Api:
         self.deadline = deadline
 
     def call(self, method, path, body=None, query=None, timeout=30):
+        """One request, retried until the deadline (else for 2 min) while Jellyfin can't take
+        it yet: 503 while it is still starting (though /System/Info/Public already works), no
+        answer at all for a moment after its network settings change (it re-binds)."""
+        give_up = self.deadline if self.deadline is not None else time.monotonic() + 120
+        while True:
+            try:
+                return self._once(method, path, body, query, timeout)
+            except SetupError as e:
+                if e.status not in (None, 503) or time.monotonic() + 2 >= give_up:
+                    raise
+            time.sleep(2)
+
+    def _once(self, method, path, body, query, timeout):
         if self.deadline is not None:
             left = self.deadline - time.monotonic()
             if left <= 0:
-                raise SetupError("Jellyfin took too long to set up")
+                raise SetupError("Jellyfin took too long to set up", "timeout")
             timeout = min(timeout, left)
         url = self.url + path + ("?" + urllib.parse.urlencode(query) if query else "")
         auth = CLIENT + (f', Token="{self.token}"' if self.token else "")
@@ -185,7 +198,7 @@ def wait(api, seconds, log):
     next_dot = time.monotonic() + 10
     while True:
         try:
-            api.call("GET", "/System/Info/Public", timeout=5)
+            api._once("GET", "/System/Info/Public", None, None, 5)  # one try: this loop waits
             return True
         except SetupError:
             if time.monotonic() >= end:
