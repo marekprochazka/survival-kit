@@ -1,5 +1,6 @@
 """Tests for server.py — the catalog of what is installed and the HTTP API (stand-in model)."""
 
+import http.client
 import json
 import os
 import tempfile
@@ -222,6 +223,18 @@ class Api(Base):
         self.assertEqual((status, r["words"][:2]), (200, ["large", "great"]))
         status, r = self.call("GET", "/api/synonyms?word=bi")
         self.assertEqual((r["words"], r["near"]), ([], ["big", "Bigwig"]))
+
+    def test_bad_content_length_is_400(self):
+        # a non-number used to crash the handler (dropped connection); a negative one hung it
+        for bad in ["abc", "-5"]:
+            with self.subTest(length=bad):
+                conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+                conn.putrequest("POST", "/api/translate")
+                conn.putheader("Content-Type", "application/json")
+                conn.putheader("Content-Length", bad)
+                conn.endheaders()
+                self.assertEqual(conn.getresponse().status, 400)
+                conn.close()
 
 
 if __name__ == "__main__":

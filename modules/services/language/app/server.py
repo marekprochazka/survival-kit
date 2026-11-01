@@ -132,6 +132,14 @@ class Catalog:
         return translator, {i: ids[i] for i in order}, self.thesaurus
 
 
+def content_length(headers):
+    """The request body's length, or None when Content-Length isn't a plain non-negative
+    number (int() would crash the handler on "abc"; a negative length would make read()
+    wait for the client to close)."""
+    raw = headers.get("Content-Length") or "0"
+    return int(raw) if raw.isascii() and raw.isdigit() else None
+
+
 @dataclass
 class Config:
     port: int
@@ -189,7 +197,10 @@ def make_server(config, catalog):
                 return self.send(404, {"error": "not found"})
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
                 return self.send(415, {"error": "send JSON"})
-            length = int(self.headers.get("Content-Length") or 0)
+            length = content_length(self.headers)
+            if length is None:
+                self.close_connection = True  # the body can't be skipped
+                return self.send(400, {"error": "bad Content-Length"})
             if length > MAX_BODY:
                 self.close_connection = True  # the unread body follows
                 return self.send(413, {"error": "too long"})

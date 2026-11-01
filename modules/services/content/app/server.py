@@ -144,6 +144,8 @@ def _drives(s, e):
                 f'<tr><td>{e(name)}{e(note)}</td><td>{_size(c["size"] or 0)}</td><td>{e(c["fstype"])}</td><td>{action}</td></tr>'
             )
         out.append("</table>")
+    else:
+        out.append('<p class="note">Plug in a drive to add it here.</p>')
     out.append(
         "<p>Adding never formats a drive: the box keeps its files in a <code>survival-kit</code> folder "
         "on it and leaves everything else alone. <em>Forget</em> stops using a drive; its files stay on it.</p>"

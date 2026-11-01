@@ -1,6 +1,7 @@
 """Tests for the chat's HTTP API and live events (server.py) — a real local server, a real worker
 thread, stand-ins for the lookup service and the model."""
 
+import http.client
 import json
 import tempfile
 import threading
@@ -206,6 +207,18 @@ class Api(unittest.TestCase):
             self.assertIn("No AI model on this box yet", r["error"])
         finally:
             self.models.append("llama")
+
+    def test_bad_content_length_is_400(self):
+        # a non-number used to crash the handler (dropped connection); a negative one hung it
+        for bad in ["abc", "-5"]:
+            with self.subTest(length=bad):
+                conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+                conn.putrequest("POST", "/api/chats")
+                conn.putheader("Content-Type", "application/json")
+                conn.putheader("Content-Length", bad)
+                conn.endheaders()
+                self.assertEqual(conn.getresponse().status, 400)
+                conn.close()
 
 
 if __name__ == "__main__":

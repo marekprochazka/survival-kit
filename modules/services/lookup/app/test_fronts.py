@@ -1,6 +1,7 @@
 """Tests for the lookup's two front doors: the internal HTTP API (server.py) and MCP (mcp.py)."""
 
 import io
+import http.client
 import json
 import threading
 import unittest
@@ -76,6 +77,17 @@ class Http(unittest.TestCase):
         self.assertEqual(self.call("POST", "/lookup", b"not json")[0], 400)
         self.assertEqual(self.call("POST", "/lookup", {"model": "m"})[0], 400)  # no question
 
+    def test_bad_content_length_is_400(self):
+        # a non-number used to crash the handler (dropped connection); a negative one hung it
+        for bad in ["abc", "-5"]:
+            with self.subTest(length=bad):
+                conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+                conn.putrequest("POST", "/invalidate")
+                conn.putheader("Content-Type", "application/json")
+                conn.putheader("Content-Length", bad)
+                conn.endheaders()
+                self.assertEqual(conn.getresponse().status, 400)
+                conn.close()
 
 class Mcp(unittest.TestCase):
     def setUp(self):

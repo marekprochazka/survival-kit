@@ -14,6 +14,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import lookup
 
 
+def content_length(headers):
+    """The request body's length, or None when Content-Length isn't a plain non-negative
+    number (int() would crash the handler on "abc"; a negative length would make read()
+    wait for the client to close)."""
+    raw = headers.get("Content-Length") or "0"
+    return int(raw) if raw.isascii() and raw.isdigit() else None
+
+
 def make_server(lk, port):
     class Handler(BaseHTTPRequestHandler):
         def send(self, code, body):
@@ -25,7 +33,10 @@ def make_server(lk, port):
             self.wfile.write(data)
 
         def body(self):
-            length = int(self.headers.get("Content-Length") or 0)
+            length = content_length(self.headers)
+            if length is None:
+                self.close_connection = True  # the body can't be skipped
+                return None  # → 400
             try:
                 data = json.loads(self.rfile.read(length) or b"{}")
             except ValueError:

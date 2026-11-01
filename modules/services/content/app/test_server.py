@@ -490,6 +490,14 @@ class Api(unittest.TestCase):
         self.assertIn('<option value="device" selected>', page)  # most free space
         self.assertIn('<option value="u-1">', page)
 
+    def test_render_hint_when_no_drive_can_be_added(self):
+        hint = "Plug in a drive to add it here."
+        self.assertIn(hint, self.call("GET", "/")[1].decode())  # nothing plugged in
+        self.offer("u-new", label="BIG2")
+        page = self.call("GET", "/")[1].decode()
+        self.assertNotIn(hint, page)  # a drive to add is listed instead
+        self.assertIn('data-action="add" data-drive="u-new"', page)
+
     def test_render_drive_missing_offers_reconnect(self):
         self.add_drive("u-1")
         self.plugged.discard("u-1")

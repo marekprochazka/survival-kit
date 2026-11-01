@@ -51,6 +51,14 @@ def utf16_len(text):
     return len(text.encode("utf-16-le")) // 2
 
 
+def content_length(headers):
+    """The request body's length, or None when Content-Length isn't a plain non-negative
+    number (int() would crash the handler on "abc"; a negative length would make read()
+    wait for the client to close)."""
+    raw = headers.get("Content-Length") or "0"
+    return int(raw) if raw.isascii() and raw.isdigit() else None
+
+
 @dataclass
 class Config:
     port: int
@@ -115,7 +123,10 @@ def make_server(config, store, worker, hub, models):
         def json_body(self):
             if not (self.headers.get("Content-Type") or "").startswith("application/json"):
                 return "415"
-            length = int(self.headers.get("Content-Length") or 0)
+            length = content_length(self.headers)
+            if length is None:
+                self.close_connection = True  # the body can't be skipped
+                return None  # → 400
             if length > MAX_BODY:
                 return "413"
             try:
