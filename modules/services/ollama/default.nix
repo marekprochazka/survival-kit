@@ -17,12 +17,18 @@ in
       port = 11434;
       # loadModels stays empty: pulling at boot needs internet (offline box)
     };
-    # Yield to the desktop: while the model thinks, Firefox and the panel still get CPU and
-    # disk first. Not the idle class — with nothing else running it still uses every core,
-    # so a chat answer isn't slower when you just wait for it.
+    # Yield to the desktop: while the model thinks, Firefox and the panel still get most of
+    # the CPU. CPU weight only splits CPU among siblings, so Ollama gets its own top-level
+    # slice next to system.slice (100) and user.slice (100, the desktop): 100 : 100 : 20.
+    # Not the idle class — with nothing else running it still uses every core, so a chat
+    # answer isn't slower when you just wait for it.
+    systemd.slices.background = {
+      description = "Heavy background work that gives way to the desktop";
+      sliceConfig.CPUWeight = 20;
+    };
     systemd.services.ollama.serviceConfig = {
-      Nice = 10;
-      CPUWeight = 20; # cgroup share vs the default 100 of everything else
+      Slice = "background.slice";
+      Nice = 10; # within its slice
       IOSchedulingClass = "best-effort";
       IOSchedulingPriority = 7; # lowest within best-effort
     };

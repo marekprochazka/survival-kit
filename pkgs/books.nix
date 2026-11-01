@@ -21,6 +21,7 @@ let
       title,
       description,
       src,
+      substitute ? false, # fill @MAPS_DATE@ (the manual; the devguide explains the placeholder)
     }:
     runCommand "${name}.zim"
       {
@@ -35,7 +36,9 @@ let
         cp ${../manual/icon.png} site/icon.png
         for md in ${src}/*.md; do
           page=$(basename "$md" .md)
-          { cat ${src}/_header.html; sed 's/@MAPS_DATE@/${mapsDate}/g' "$md" | lowdown -thtml; cat ${src}/_footer.html; } > "site/$page.html"
+          { cat ${src}/_header.html; ${
+            if substitute then "sed 's/@MAPS_DATE@/${mapsDate}/g' \"$md\"" else "cat \"$md\""
+          } | lowdown -thtml; cat ${src}/_footer.html; } > "site/$page.html"
         done
         zimwriterfs --name ${name} --title "${title}" --description "${description}" \
           --creator survival-kit --publisher survival-kit --language eng \
@@ -48,6 +51,7 @@ in
     title = "survival-kit manual";
     description = "How to use and maintain this survival-kit";
     src = ../manual;
+    substitute = true;
   };
   devguide = mkBook {
     name = "survival-kit-dev";

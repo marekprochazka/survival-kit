@@ -22,9 +22,12 @@ assert lib.assertMsg (
   let
     sc = cfg.systemd.services.ollama.serviceConfig;
   in
-  sc.Nice == 10
-  && sc.CPUWeight == 20
+  # CPUWeight only counts among siblings: inside system.slice it would weigh Ollama against
+  # other services, not against the desktop (user.slice) — hence a top-level slice
+  sc.Slice == "background.slice"
+  && cfg.systemd.slices.background.sliceConfig.CPUWeight == 20
+  && sc.Nice == 10
   && sc.IOSchedulingClass == "best-effort"
   && sc.IOSchedulingPriority == 7
-) "ollama yields to the desktop (lower CPU and disk priority, not idle)";
+) "ollama yields to the desktop: own background.slice at CPU weight 20 (not idle)";
 pkgs.runCommand "eval-ollama" { } "touch $out"

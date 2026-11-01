@@ -176,6 +176,9 @@ pkgs.testers.runNixOSTest {
         machine.succeed("curl -sf http://127.0.0.1:11434/api/version | grep -q version")
         # the CLI as the owner, against the system service; no model yet → empty list
         machine.succeed("su - deck -c 'ollama list'")
+        # gives way to the desktop: its own top-level slice, CPU weight 20
+        assert machine.succeed("systemctl show -p Slice --value ollama.service").strip() == "background.slice"
+        assert machine.succeed("cat /sys/fs/cgroup/background.slice/cpu.weight").strip() == "20"
 
     with subtest("Content manager: import, replace a built-in, delete"):
         CM = "${curl} -sf https://content.deck"

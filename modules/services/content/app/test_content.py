@@ -287,8 +287,14 @@ class MapNames(unittest.TestCase):
         self.assertEqual(content.map_name("Österreich.pmtiles"), "osterreich.pmtiles")
         self.assertEqual(content.map_name("Île-de-France.pmtiles"), "ile-de-france.pmtiles")
         self.assertEqual(content.map_name("Česko z12.pmtiles"), "cesko-z12.pmtiles")
-        with self.assertRaises(Refused):  # no Latin letters at all: a clear refusal
+        # letters NFKD doesn't split get a plain spelling
+        self.assertEqual(content.map_name("Łódź.pmtiles"), "lodz.pmtiles")
+        self.assertEqual(content.map_name("Straße.pmtiles"), "strasse.pmtiles")
+        self.assertEqual(content.map_name("Øresund Æbeltoft.pmtiles"), "oresund-aebeltoft.pmtiles")
+        self.assertEqual(content.map_name("Москва z10.pmtiles"), "z10.pmtiles")  # no leading dash
+        with self.assertRaises(Refused) as no_latin:  # no Latin letters at all: a clear refusal
             content.map_name("Ελλάδα.pmtiles")
+        self.assertIn("Latin letters or digits", str(no_latin.exception))
 
 
 class MapsTest(unittest.TestCase):

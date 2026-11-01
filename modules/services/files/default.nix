@@ -196,7 +196,9 @@ in
         '';
       };
       extraConfig = ''
-        # a copy/move into Library/ names it only in ?destination=
+        # a copy/move into Library/ names it only in ?destination= ($arg_ isn't URL-decoded,
+        # so "%4Cibrary" slips past — harmless: the read-only mount is the real protection,
+        # these rules only turn File Browser's 500 into a clear 403)
         if ($arg_destination ~* "^(/|%2F)Library(/|%2F|$)") { return 403; }
         # uploads of any size, streamed to File Browser instead of buffered by nginx
         client_max_body_size 0;

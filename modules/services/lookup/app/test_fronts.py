@@ -89,6 +89,17 @@ class Http(unittest.TestCase):
                 self.assertEqual(conn.getresponse().status, 400)
                 conn.close()
 
+    def test_huge_body_is_413(self):
+        # the size is checked before reading: no allocation, no wait for a body never sent
+        conn = http.client.HTTPConnection("127.0.0.1", self.httpd.server_address[1], timeout=10)
+        conn.putrequest("POST", "/invalidate")
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("Content-Length", str(10**9))
+        conn.endheaders()
+        self.assertEqual(conn.getresponse().status, 413)
+        conn.close()
+
+
 class Mcp(unittest.TestCase):
     def setUp(self):
         self.lookup = FakeLookup()

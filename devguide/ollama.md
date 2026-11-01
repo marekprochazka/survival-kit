@@ -22,9 +22,14 @@
   browser front end.
 - Package: the CPU build, ~150 MB. Small models (3B, Q4, ~2 GB) answer at a few words per
   second on an i5; 7B models crawl.
-- **Yields to the desktop:** `Nice = 10`, `CPUWeight = 20` (systemd's CPU share; everything
-  else has 100) and the lowest best-effort disk priority. While the model thinks, Firefox and
-  the panel get CPU first; with nothing else running it still uses every core. Not the
-  `idle` class: an answer someone is waiting for must not stall. Memory headroom comes from
+- **Yields to the desktop:** Ollama runs in its own top-level slice, `background.slice`, with
+  `CPUWeight = 20`. A CPU weight only splits CPU among *siblings* in systemd's cgroup tree:
+  at the top are `system.slice` (all services, 100), `user.slice` (the desktop session, 100)
+  and now `background.slice` (20). Under contention the desktop gets about 100/120 ≈ 83 %
+  against Ollama; with nothing else running, weights don't apply and Ollama uses every
+  core. (Setting `CPUWeight` on the service itself would only weigh it against other
+  services inside `system.slice`, not against Firefox.) Plus `Nice = 10` within its slice
+  and the lowest best-effort disk priority. Not the `idle` class: an answer someone is
+  waiting for must not stall. Check: `systemd-cgls`, `cat /sys/fs/cgroup/background.slice/cpu.weight`. Memory headroom comes from
   zram (see [Base](base.html)).
 - Logs: `journalctl -u ollama`. API check: `curl http://127.0.0.1:11434/api/version`.

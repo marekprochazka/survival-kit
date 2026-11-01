@@ -76,6 +76,13 @@ def model_name(filename):
     return clean_model_name(_stem(filename, ".gguf"))
 
 
+# Latin letters that NFKD doesn't decompose into a base letter + mark
+_PLAIN_LETTERS = str.maketrans({
+    "ß": "ss", "ẞ": "SS", "Ł": "L", "ł": "l", "Ø": "O", "ø": "o", "Æ": "AE", "æ": "ae",
+    "Đ": "D", "đ": "d", "Œ": "OE", "œ": "oe", "Þ": "TH", "þ": "th",
+})
+
+
 def map_name(filename):
     """File name a map is stored under: <stem>.pmtiles, lower case, [a-z0-9._-] only.
 
@@ -83,12 +90,14 @@ def map_name(filename):
     built-in map of the same name (world, central-europe, czechia).
     """
     # accented Latin letters keep their base letter ("Österreich" → "osterreich", not
-    # "-sterreich"): NFKD splits "Ö" into "O" + a combining mark, which is dropped
-    decomposed = unicodedata.normalize("NFKD", _stem(filename, ".pmtiles"))
+    # "-sterreich"): NFKD splits "Ö" into "O" + a combining mark, which is dropped; the few
+    # letters NFKD can't split get a plain spelling first ("Łódź" → "lodz", "Straße" → "strasse")
+    spelled = _stem(filename, ".pmtiles").translate(_PLAIN_LETTERS)
+    decomposed = unicodedata.normalize("NFKD", spelled)
     plain = "".join(c for c in decomposed if not unicodedata.combining(c))
-    stem = re.sub(r"[^a-z0-9._-]+", "-", plain.lower()).lstrip(".")
+    stem = re.sub(r"[^a-z0-9._-]+", "-", plain.lower()).lstrip(".-")
     if not stem.strip("-._"):
-        raise Refused("this file name can't be used for a map")
+        raise Refused("this file name can't be used for a map — rename the file using Latin letters or digits")
     if len(stem) > MAX_NAME:
         raise Refused(f"this file name is too long (at most {MAX_NAME} characters)")
     return stem + ".pmtiles"

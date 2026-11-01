@@ -13,6 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import lookup
 
+MAX_BODY = 64 * 1024  # small JSON requests only; nothing legitimate is bigger
+TOO_BIG = object()  # body() result: refused before reading
+
 
 def content_length(headers):
     """The request body's length, or None when Content-Length isn't a plain non-negative
@@ -37,6 +40,9 @@ def make_server(lk, port):
             if length is None:
                 self.close_connection = True  # the body can't be skipped
                 return None  # → 400
+            if length > MAX_BODY:
+                self.close_connection = True  # the unread body follows
+                return TOO_BIG
             try:
                 data = json.loads(self.rfile.read(length) or b"{}")
             except ValueError:
@@ -55,6 +61,8 @@ def make_server(lk, port):
 
         def do_POST(self):
             data = self.body()
+            if data is TOO_BIG:
+                return self.send(413, {"error": "too long"})
             if data is None:
                 return self.send(400, {"error": "expected a JSON object"})
             if self.path == "/invalidate":
