@@ -24,6 +24,11 @@ display manager**:
    writes the marker `/var/lib/survival-kit/firstboot-done`, saves the name to
    `/var/lib/survival-kit/display-name`, then sets it (`usermod -c`). A failing name never
    costs the password.
+4. Hands the same name and password to **Media** (`$FIRSTBOOT_MEDIA_SETUP`, the unit's
+   environment; empty without Media): `printf` (a shell builtin) pipes them into
+   `survival-kit-media-setup`, which makes the Jellyfin owner account — see
+   [Media](media.html). It may wait up to 3 minutes for Jellyfin; a failure prints a note
+   and first boot still finishes (exit 2 = already set up, no note).
 
 Ctrl+C / Ctrl+\\ / Ctrl+Z are ignored; Ctrl+D (end of input) counts as an empty answer, and
 after three in a row the prompt gives up for now (no marker — it returns at the next start).

@@ -22,8 +22,8 @@
   browser front end.
 - Package: the CPU build, ~150 MB. Small models (3B, Q4, ~2 GB) answer at a few words per
   second on an i5; 7B models crawl.
-- **Yields to the desktop:** Ollama runs in its own top-level slice, `background.slice`, with
-  `CPUWeight = 20`. A CPU weight only splits CPU among *siblings* in systemd's cgroup tree:
+- **Yields to the desktop:** Ollama runs in the top-level slice `background.slice` (defined in
+  `modules/base`, shared with Jellyfin's scans), with `CPUWeight = 20`. A CPU weight only splits CPU among *siblings* in systemd's cgroup tree:
   at the top are `system.slice` (all services, 100), `user.slice` (the desktop session, 100)
   and now `background.slice` (20). Under contention the desktop gets about 100/120 ≈ 83 %
   against Ollama; with nothing else running, weights don't apply and Ollama uses every

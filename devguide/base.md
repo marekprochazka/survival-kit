@@ -27,6 +27,11 @@ modules it has no `enable` option: importing it applies it.
   feels broken rather than slow. An owner with a fast SSD who wants one adds it in
   `/etc/nixos` (e.g. `swapDevices = [ { device = "/var/lib/swapfile"; size = 4096; } ];`,
   size in MB) and rebuilds.
+- **`background.slice` — heavy work gives way to the desktop:** a top-level systemd slice
+  with `CPUWeight = 20`, next to `system.slice` (services, 100) and `user.slice` (the
+  desktop, 100). Under load the desktop keeps about 100/120 ≈ 83 % of the CPU; an otherwise
+  idle box still gives the work every core. Used by Ollama (answers) and Jellyfin (scans,
+  sound conversion) — see [Ollama](ollama.html) for why it has to be a slice of its own.
 - **sudo** for `wheel` with a password; a few base tools (vim, git, htop, tmux, curl).
 
 What "offline" does **not** cover: rebuilding a *changed* configuration usually needs to

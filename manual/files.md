@@ -1,7 +1,7 @@
 # Files
 
 The **Files** tile (<https://files.deck>) is your own small cloud on this box: keep
-documents, photos and anything else here, and download the box's wiki books and maps. It
+documents, photos and anything else here, and download the box's wiki books, maps and media. It
 works without internet.
 
 **First use.** Open Files and choose **Sign up**. As the name, use your name followed by
@@ -16,7 +16,7 @@ files are yours — others can't see them.
 - **This device** — your files on this computer;
 - one folder per **big drive** added in [Content](content.html) (e.g. **Big**) — your
   files on that drive. Use it for things that don't fit on the computer;
-- **Library** — the box's wiki books and maps, to download (e.g. to copy a book to a
+- **Library** — the box's wiki books, maps and media (films, series, music), to download (e.g. to copy a book to a
   stick). Read-only: they are managed in [Content](content.html).
 
 Put files into one of these folders — the top level itself takes nothing.

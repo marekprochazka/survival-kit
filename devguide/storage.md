@@ -1,8 +1,8 @@
 # Storage (content on several drives)
 
 `modules/services/storage.nix` + `modules/services/content/app/{locations,library,drives}.py`
-— where the box's content lives (ADR-0006). Wiki books, maps, translation models and
-dictionaries can live on **this device** and on **added drives** (a big disk that stays
+— where the box's content lives (ADR-0006). Wiki books, maps, translation models,
+dictionaries and media (films, series, music) can live on **this device** and on **added drives** (a big disk that stays
 plugged in). Services never see the drives: they read one merged, checked **library**.
 
 ## Locations
@@ -14,6 +14,7 @@ Every location has the same tree:
     maps/               ← *.pmtiles
     translate/          ← *.argosmodel (translation models, see [Language](language.html))
     dict/               ← *.dictd.tar.xz (dictionaries)
+    media/              ← movies/<title>/, shows/<series>/<season>/, music/<album>/ (see [Media](media.html))
     models/             ← (unused: AI models stay in Ollama's own store, see below)
     files/<account>/    ← people's own files (see [Files](files.html))
     .incoming/          ← uploads in progress
@@ -33,6 +34,19 @@ this box knows → the drive is not used ("set up by a newer survival-kit").
 `/var/lib/survival-kit/library` is a **symlink** to `.library-<time>/`, which holds
 `wiki/<name>.zim` and `maps/<name>.pmtiles` — links to the copy **in use** of every book
 and map. Kiwix (`kiwix-library`) and nginx (`maps.deck/imported/`) read only this.
+
+**Media is the exception to "one file, one name":** its unit is a **folder** — a film, a
+season, an album (`media.scan_items`). It is found by **layout only**, never opened or
+checked, so it is never `invalid` (a drive's posters, `.nfo` files, `Sample/` folders and
+names with `:` are fine); only duplicates exist. The index has `media/movies/<name>` and
+`media/music/<name>` as links to the folders and `media/shows/<series>/` as a real folder of
+season links, so a series can have seasons on several locations. `movies/`, `shows/` and
+`music/` are always there (Jellyfin refuses a library whose folder is missing). Item
+folders, and every folder from the drive's root down to them, are made readable for
+Jellyfin; links inside a drive's media tree are never followed. After every rebuild the
+library asks Jellyfin to rescan (`notify_media`, with the box's key — see
+[Media](media.html)). The index path of an item never changes when the index is rebuilt,
+so Jellyfin's watch progress stays.
 
 `survival-kit-library.service` (`library.py`, oneshot, root, confined to
 `/var/lib/survival-kit`) builds it:

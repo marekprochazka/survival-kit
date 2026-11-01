@@ -10,11 +10,12 @@ desktop itself logs in automatically.
 - [What's on this box](whats-on-this-box.html) — the services and how to reach them
 - [Maps](maps.html) — offline maps, measuring distances, getting more maps
 - [Language](language.html) — translate English ↔ Czech, dictionary, thesaurus
-- [Content](content.html) — bring in wiki books, maps, languages and AI models from a stick
+- [Content](content.html) — bring in wiki books, maps, languages, media and AI models from a stick
 - [Content sticks](usb-sticks.html) — what's on the wiki and AI-model sticks; which model to pick
 - [Passwords](passwords.html) — the offline password manager
 - [Files](files.html) — your own files, and the box's books and maps to download
 - [Inventory](inventory.html) — what the household has, where it is and how many
+- [Media](media.html) — films, series and music; adding people
 - [Chat](chat.html) — ask the local AI; it looks in the wiki first (full profile)
 - [AI models](ai-models.html) — the models behind the chat (full profile)
 - [Adding content](adding-content.html) — more wikis and documents

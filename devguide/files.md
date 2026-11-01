@@ -17,8 +17,8 @@ sees there:
     Library/
       Built-in/wiki/<book>  ← the starter books (one bind per file)           read-only
       Built-in/maps/<map>   ← the built-in maps                                read-only
-      This device/{wiki,maps}  ← /var/lib/survival-kit/data/{wiki,maps}        read-only
-      <drive name>/{wiki,maps} ← <drive>/survival-kit/{wiki,maps}              read-only
+      This device/{wiki,maps,media}  ← /var/lib/survival-kit/data/{wiki,maps,media}  read-only
+      <drive name>/{wiki,maps,media} ← <drive>/survival-kit/{wiki,maps,media}        read-only
 
 Every entry is a **bind mount**, not a symlink: File Browser hides and refuses links that
 point outside a person's space (tested 2026-10-30). The built-in folders are link farms

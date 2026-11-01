@@ -9,8 +9,9 @@
 | <https://vault.deck> | Passwords — offline password manager (see [Passwords](passwords.html)) |
 | <https://files.deck> | Files — your own files on this device or a big drive, and the box's books and maps to download (see [Files](files.html)) |
 | <https://inventory.deck> | Inventory — what the household has, where it is and how many (see [Inventory](inventory.html)) |
+| <https://media.deck> | Media — films, series and music (Jellyfin; see [Media](media.html)) |
 | <https://chat.deck> | Chat — ask the local AI, answers from the wiki with sources (full only; see [Chat](chat.html)) |
-| <https://content.deck> | Content — import wiki books, maps, languages and AI models, see disk use (see [Content](content.html)) |
+| <https://content.deck> | Content — import wiki books, maps, languages, media and AI models, see disk use (see [Content](content.html)) |
 
 **lite or full.** The box was installed as one of two *profiles*: **lite** (the above —
 for machines with little memory or a slow processor) or **full** (adds local

@@ -1,19 +1,20 @@
 # Content
 
-The **Content** tile (<https://content.deck>) brings new wiki books, maps, languages and AI
+The **Content** tile (<https://content.deck>) brings new wiki books, maps, languages, media and AI
 models onto the box from a USB stick or a disc, keeps them on this device or on a big drive
 that stays plugged in, shows how much space is used, and removes things you no longer need.
 
 ## Importing
 
 1. Plug in the stick (or insert the disc) and open **Content**.
-2. Pick where new files go: **Save new books, maps and languages to** (this device or an
+2. Pick where new files go: **Save new books, maps, languages and media to** (this device or an
    added drive — the one with the most free space is chosen for you).
 3. Under *Wiki books*, choose **Import wiki files** (or **a folder** to take every `.zim` in
    it); under *Maps*, choose **Import map files** (`.pmtiles` — see
    [Getting more maps](maps.html#getting-more-maps)); under *Languages*, choose **Import
    translation models** (`.argosmodel`) or **Import dictionaries** (`.dictd.tar.xz` — see
-   [More languages](language.html#more-languages)); under *AI models*, choose
+   [More languages](language.html#more-languages)); under *Media*, fill in the form for a
+   film, a season or an album (see [Media](media.html#adding-films-series-and-music)); under *AI models*, choose
    **Import a model** (a `.gguf` file).
 4. In the file dialog, click your stick or disc in the side panel — that opens it — and
    pick the files.
@@ -84,7 +85,7 @@ drive for good; its files stay on it — books, maps and people's own [Files](fi
 
 ## Deleting and disk space
 
-Each imported book, map and model has a **Delete** button (it asks first); it deletes that
+Each imported book, map, film, season, album and model has a **Delete** button (it asks first); it deletes that
 one copy, wherever it is (the *Where* column). Books, maps and languages that came with the
 box can't be deleted. *Drives* shows the free space of this device and each added drive.
 

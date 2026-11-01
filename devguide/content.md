@@ -1,10 +1,10 @@
 # Content manager
 
-`modules/services/content/` — <https://content.deck>: import wiki books, maps and AI models
-through the browser's file dialog, list them with sizes, delete them, show disk use
+`modules/services/content/` — <https://content.deck>: import wiki books, maps, languages,
+media and AI models through the browser's file dialog, list them with sizes, delete them, show disk use
 (ADR-0004), on this device or on an added drive, and add/forget drives (ADR-0006, see
 [Storage](storage.html)). On in both profiles; the maps part when [Maps](maps.html) is on,
-the models part only when Ollama is on.
+the models part only when Ollama is on, the media part when [Media](media.html) is on.
 
 ## Files
 
@@ -12,6 +12,7 @@ the models part only when Ollama is on.
 |---|---|
 | `app/content.py` | All file logic: name rules, space check, streaming an upload to disk, `Shelf` (wiki books, maps, on all locations), `Models` — no HTTP |
 | `app/locations.py`, `app/library.py`, `app/drives.py` | Locations, the library (checks, newer-wins, index, set-aside, `Places`), drives — see [Storage](storage.html) |
+| `app/media.py` | Media: name rules (real letters kept), file sniffing, film title suggestion, the layout scan (`scan_items`) and `MediaShelf` (batch imports, delete) |
 | `app/pmtiles.py` | Reads a map file's header and description; decides whether an import can be drawn here |
 | `app/server.py` | The JSON API + the page (stdlib `http.server`); real helpers for Kiwix and Ollama |
 | `app/static/` | `index.html` (template; the server fills in the lists) and `content.js` (imports, progress, confirmations) |
@@ -31,6 +32,11 @@ are one file per request with the raw file as the body).
 | `GET /api/check?kind=&file=&size=[&to=][&model=]` | the stored name, whether it exists (`import`/`builtin`), space check on location `to` (default `device`) — before uploading |
 | `PUT /api/upload?kind=&file=[&to=][&model=]` | `kind` = `wiki`, `map` or `model`; body = the file; `Content-Length` required; saved to location `to` (models: always this device); answers `name`, `result` (`added`/`replaced`) and `note` (a doubt worth showing, or null) |
 | `DELETE /api/wiki/<name>[?at=&file=]`, `/api/maps/<name>[?at=&file=]`, `/api/models/<name>` | delete one copy: the one on location `at` (named `file`), else the one in use |
+| `GET /api/media/suggest?file=` | a film's title and year guessed from its file name (for the form) |
+| `POST /api/media/begin?type=&size=[&to=]` (type film, series or music) + `title`, `year` / `series`, `season` / `name` | starts a batch: the item key (`movies/The Kid (1921)`, `shows/S/Season 01`, `music/A`), whether it exists; space checked on the **total** |
+| `PUT /api/media/upload?batch=&file=` | one file of the batch (`file` may be `CD1/01.flac` for music); checked by extension and content (`media.sniff`); more bytes than announced cancels the batch |
+| `POST /api/media/finish?batch=`, `/api/media/cancel?batch=` | finish: the batch must have its video (film: exactly one) or audio, then it is renamed into place — only now does the item exist; cancel: staging removed |
+| `DELETE /api/media/<item>[?at=]` | delete a film, season (the series folder goes with its last season) or album — only a real folder inside that location's `media/` |
 | `POST /api/resolve?at=` | auto-resolve: move that location's invalid and duplicate files out of the tree |
 | `POST /api/drives/add?uuid=[&name=]`, `/api/drives/<uuid>/forget`, `/api/drives/<uuid>/reconnect` | add a drive (refused: unknown, used by the system, FAT32/encrypted, already added); forget (files stay); mount again |
 
@@ -62,6 +68,13 @@ the page's dialogs are only for the person.
   `ollama create` from a temp Modelfile (as by hand), then the upload is deleted.
 - **Space:** refused unless `size` (models: `2 × size`) plus a margin of
   `max(2 GiB, 5 % of the disk)` is free — on the chosen location's disk.
+- **Media:** a batch is staged in the location's `.incoming/media-<batch>/` and moved into
+  place with renames only (an old copy is renamed aside first, then removed), so a cut-off
+  import leaves nothing; staging is cleared at service start. Names keep their real letters
+  (accents, other scripts, spaces, parentheses — they are the titles Jellyfin shows);
+  `/ \ : * ? " < > |` and control characters are replaced or dropped, at most 200 bytes. A
+  film's video is renamed to the item (`The Kid (1921).mkv`), subtitles keep a language tag
+  (`.cs.srt`). The page skips files of other types in a music folder.
 - **Replacing:** an import replaces the copy of that name **in use**, wherever it is;
   duplicates on other locations are left alone. Delete removes only the copy clicked.
 

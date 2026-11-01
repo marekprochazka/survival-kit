@@ -16,6 +16,7 @@ The repository (on an installed box: `/etc/nixos`):
 | `modules/tls/` | HTTPS: the box's certificate authority and site certificate, made at boot |
 | `modules/services/vaultwarden/` | Passwords: the Vaultwarden service |
 | `modules/services/inventory/` | Inventory: Homebox + its nightly backup |
+| `modules/services/media/` | Media: Jellyfin + its one-time setup helper (`app/setup.py`) |
 | `modules/services/ollama/` | Local AI (full profile): the Ollama service + CLI |
 | `modules/profiles/` | lite/full: which services a box gets |
 | `modules/services/lookup/` | Wiki lookup: book map → search → read; HTTP for the chat + MCP command |
