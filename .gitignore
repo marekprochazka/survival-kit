@@ -1,3 +1,5 @@
 build/
 *.fd
 __pycache__/
+result
+result-*
