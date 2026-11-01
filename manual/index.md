@@ -14,6 +14,7 @@ desktop itself logs in automatically.
 - [Content sticks](usb-sticks.html) — what's on the wiki and AI-model sticks; which model to pick
 - [Passwords](passwords.html) — the offline password manager
 - [Files](files.html) — your own files, and the box's books and maps to download
+- [Inventory](inventory.html) — what the household has, where it is and how many
 - [Chat](chat.html) — ask the local AI; it looks in the wiki first (full profile)
 - [AI models](ai-models.html) — the models behind the chat (full profile)
 - [Adding content](adding-content.html) — more wikis and documents

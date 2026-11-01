@@ -15,6 +15,7 @@ The repository (on an installed box: `/etc/nixos`):
 | `modules/services/web.nix` | The service **registry** and what it generates (nginx, hosts, health) |
 | `modules/tls/` | HTTPS: the box's certificate authority and site certificate, made at boot |
 | `modules/services/vaultwarden/` | Passwords: the Vaultwarden service |
+| `modules/services/inventory/` | Inventory: Homebox + its nightly backup |
 | `modules/services/ollama/` | Local AI (full profile): the Ollama service + CLI |
 | `modules/profiles/` | lite/full: which services a box gets |
 | `modules/services/lookup/` | Wiki lookup: book map → search → read; HTTP for the chat + MCP command |

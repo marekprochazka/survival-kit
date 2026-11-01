@@ -8,6 +8,7 @@
 | <https://language.deck> | Language — translate English ↔ Czech, an English dictionary and thesaurus (see [Language](language.html)) |
 | <https://vault.deck> | Passwords — offline password manager (see [Passwords](passwords.html)) |
 | <https://files.deck> | Files — your own files on this device or a big drive, and the box's books and maps to download (see [Files](files.html)) |
+| <https://inventory.deck> | Inventory — what the household has, where it is and how many (see [Inventory](inventory.html)) |
 | <https://chat.deck> | Chat — ask the local AI, answers from the wiki with sources (full only; see [Chat](chat.html)) |
 | <https://content.deck> | Content — import wiki books, maps, languages and AI models, see disk use (see [Content](content.html)) |
 
@@ -24,7 +25,7 @@ first start (the desktop logs in automatically).
 
 **Logins that want an email address.** Some services ask for an email address as your
 login name, but this box sends no email. Use your name followed by `@` and the service's
-address — e.g. **`anna@vault.deck`** for Passwords, **`anna@files.deck`** for Files. It only has to *look* like an email.
+address — e.g. **`anna@vault.deck`** for Passwords, **`anna@files.deck`** for Files, **`anna@inventory.deck`** for Inventory. It only has to *look* like an email.
 
 The wiki ships with: the **Arch Wiki** (general Linux help), **man pages**,
 **Nix**, **bash** and **git** references, and this manual.

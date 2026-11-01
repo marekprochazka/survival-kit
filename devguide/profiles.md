@@ -4,7 +4,7 @@
 
 | Profile | Services | For |
 |---|---|---|
-| `lite` | wiki (Kiwix), maps, passwords (Vaultwarden), content manager, wiki lookup | low RAM, slow CPU |
+| `lite` | wiki (Kiwix), maps, language, passwords (Vaultwarden), files, inventory (Homebox), content manager, wiki lookup | low RAM, slow CPU |
 | `full` | lite + local AI ([Ollama](ollama.html)) and the [chat](chat.html) | ≥ 8 GB RAM, i5-class CPU |
 
 Always on, whatever the profile: dashboard, desktop, first boot, HTTPS.

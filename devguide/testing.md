@@ -11,8 +11,8 @@ All tests are flake checks: `checks/<name>.nix`, collected in `checks/default.ni
 | Layer | Checks | Speed | Runs |
 |---|---|---|---|
 | Static | `lint` (nixfmt, statix, deadnix) | seconds | pre-commit hook, CI, locally |
-| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles, content, chat, maps) + `firstboot-script` + `tls-script` + `content-unit` + `lookup-unit` + `chat-unit` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
-| VM | `boot`, `services`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
+| Config | `eval-*` (disk, web, desktop, install, firstboot, iso, tls, vaultwarden, ollama, profiles, content, chat, maps, storage, files, language, inventory) + `firstboot-script` + `tls-script` + `content-unit` + `lookup-unit` + `chat-unit` + `language-unit` + `panel-drift`, grouped as `eval` | seconds | CI, locally |
+| VM | `boot`, `services`, `drives`, `files`, `language`, `inventory`, `desktop`, `firstboot` | 1–5 min each | locally (needs KVM) |
 | Closure | `lite-closure` (no Ollama anywhere in a lite system) | minutes (builds lite) | locally |
 | Install | installing from the ISO | long | by hand (QEMU / VirtualBox, offline) |
 
