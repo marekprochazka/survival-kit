@@ -22,8 +22,12 @@ let
       cd ${backupRoot}
       day=$(date +%F)
       mkdir -p daily
+      # build under a temporary name, rename when complete: an interrupted copy (disk full)
+      # never looks like a real day, never counts toward the 7, can't be restored by mistake
+      rm -rf daily/.*.tmp
+      cp -a latest "daily/.$day.tmp"
       rm -rf "daily/$day"
-      cp -a latest "daily/$day"
+      mv "daily/.$day.tmp" "daily/$day"
       touch "daily/$day"
       # shellcheck disable=SC2012 # names are dates (no spaces/newlines)
       ls -1dt daily/* | tail -n +8 | xargs -r rm -rf
@@ -59,7 +63,12 @@ in
       # also runs it at every boot, which would overwrite a good copy before anyone
       # noticed a problem.
       wantedBy = lib.mkForce [ ];
-      serviceConfig.ExecStartPost = "+${lib.getExe keepDaily}"; # "+": as root
+      serviceConfig = {
+        ExecStartPost = "+${lib.getExe keepDaily}"; # "+": as root
+        # often runs at boot (Persistent, box off at 23:00) next to the desktop: stay out of the way
+        Nice = 19;
+        IOSchedulingClass = "idle";
+      };
     };
 
     survivalKit.registry.vault = {

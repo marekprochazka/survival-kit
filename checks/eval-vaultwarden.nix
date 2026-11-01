@@ -23,6 +23,12 @@ assert lib.assertMsg
   (lib.hasInfix "vaultwarden-keep-daily" cfg.systemd.services.backup-vaultwarden.serviceConfig.ExecStartPost)
   "each backup must keep a dated copy";
 assert lib.assertMsg (
+  let
+    sc = cfg.systemd.services.backup-vaultwarden.serviceConfig;
+  in
+  sc.Nice == 19 && sc.IOSchedulingClass == "idle"
+) "the backup must not slow the desktop (it often runs at boot)";
+assert lib.assertMsg (
   !(lib.elem "network-online.target" (unit.wants ++ unit.after))
 ) "a loopback-only service must not wait for the network";
 assert lib.assertMsg (

@@ -164,6 +164,11 @@ pkgs.testers.runNixOSTest {
         machine.succeed("test -s /var/backup/vaultwarden/latest/db.sqlite3")
         machine.succeed("test -s /var/backup/vaultwarden/daily/$(date +%F)/db.sqlite3")
         assert machine.succeed("ls /var/backup/vaultwarden/daily | wc -l").strip() == "1"
+        # a half-made copy from an interrupted run (disk full) is cleaned up, never counted
+        machine.succeed("mkdir -p /var/backup/vaultwarden/daily/.$(date +%F).tmp/partial")
+        machine.succeed("systemctl start backup-vaultwarden.service")
+        assert machine.succeed("ls -A /var/backup/vaultwarden/daily | wc -l").strip() == "1"
+        machine.succeed("test -s /var/backup/vaultwarden/daily/$(date +%F)/db.sqlite3")
 
     with subtest("Ollama (local AI)"):
         machine.wait_for_unit("ollama.service")
