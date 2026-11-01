@@ -13,13 +13,13 @@ password.
 ## Suggested setup: one shared household inventory
 
 Homebox keeps things in **collections**. Everyone in a collection sees and edits the same
-items. One person can belong to several collections and switch between them at the top of
-the page.
+items. One person can belong to several collections and switch between them with the
+collection dropdown in the sidebar, under the picture.
 
 **The first person** to sign up gets a collection of their own. Make it the household's:
 
-1. Open **Manage Collection**, and on **Settings** rename it to e.g. **Household**.
-2. On **Invites**, choose **Create Invite**. Pick how long it stays valid and how many
+1. In the sidebar, open **Collection → Settings** and rename it to e.g. **Household**.
+2. In **Collection → Invites**, choose **Create Invite**. Pick how long it stays valid and how many
    people may use it, then **Copy Invite Link**. The link is shown only once, so copy it
    now.
 3. Give the link to the others.
@@ -28,11 +28,11 @@ the page.
 
 - **New here:** open the invite link and register through it. You land straight in
   Household.
-- **Already have an account:** open the collection menu at the top, choose **Join Existing
+- **Already have an account:** open the collection dropdown in the sidebar, choose **Join Existing
   Collection**, and paste the invite as the **Collection Invite Code**. Household is added
   next to what you already have.
 
-**Something just for you?** From the same menu, **Create New Collection**. Nobody else
+**Something just for you?** From the same dropdown, **Create New Collection**. Nobody else
 sees it unless you invite them.
 
 ## Good to know
