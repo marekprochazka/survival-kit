@@ -68,13 +68,20 @@ if ! usermod -c "$name" "$FIRSTBOOT_USER"; then
 fi
 
 # Media (Jellyfin) gets the same name and password for its first account. Both go on stdin
-# (printf is a shell builtin: nothing appears in a command line). Exit 2 = already set up.
+# (printf is a shell builtin: nothing appears in a command line). Exit 2 = already set up,
+# 3 = done, but the name had to change (the helper printed a note).
 if [[ -n ${FIRSTBOOT_MEDIA_SETUP:-} ]]; then
-  echo "Setting up Media (this can take a minute)…"
+  echo "Setting up Media (this can take a few minutes on an older computer)…"
   media=0
   printf '%s\n%s\n' "$name" "$pass1" | "$FIRSTBOOT_MEDIA_SETUP" || media=$?
+  if ((media != 0 && media != 2 && media != 3)); then
+    echo "Note: Media couldn't be set up now. Later, in a terminal, run:"
+    echo "  sudo survival-kit-media-setup"
+    echo "(it asks for this name and password; the manual's Media page has more)."
+  fi
   if ((media != 0 && media != 2)); then
-    echo "Note: Media couldn't be set up now — the manual's Media page says how to finish it."
+    printf 'Press Enter to continue. ' # let the note be read (read -p shows only on a tty)
+    read -r _ || true
   fi
 fi
 unset pass1

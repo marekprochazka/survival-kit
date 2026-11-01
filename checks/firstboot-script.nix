@@ -56,6 +56,13 @@ pkgs.runCommand "firstboot-script" { } ''
   ${expect "media [Test Person|pw] args[]"}
   [ "$(head -n1 "$CALLS")" = "chpasswd [deck:pw]" ] || { echo "the box password must come first"; cat "$CALLS"; exit 1; }
   grep -q "Setting up Media" <<<"$said" || { echo "no 'Setting up Media' line"; echo "$said"; exit 1; }
+  if grep -q "Press Enter" <<<"$said"; then echo "no pause without a note"; exit 1; fi
+
+  echo "== Media: the name had to change (exit 3) — wait so the note can be read"
+  rm -f "$CALLS" marker name
+  said=$(printf 'Test Person\npw\npw\n\n' | MEDIA_EXIT=3 FIRSTBOOT_MEDIA_SETUP=$PWD/bin/media-setup FIRSTBOOT_USER=deck \
+    FIRSTBOOT_MARKER=$PWD/marker FIRSTBOOT_NAME_FILE=$PWD/name bash -euo pipefail ${script} 2>&1)
+  grep -q "Press Enter" <<<"$said" || { echo "no pause after a note"; echo "$said"; exit 1; }
 
   echo "== Media setup failing never stops first boot"
   rm -f "$CALLS" marker name
@@ -65,6 +72,8 @@ pkgs.runCommand "firstboot-script" { } ''
   ${expect "chpasswd [deck:pw]"}
   test -e marker || { echo "marker missing after a media failure"; exit 1; }
   grep -q "Media couldn't be set up" <<<"$said" || { echo "no failure note"; echo "$said"; exit 1; }
+  grep -q "Press Enter" <<<"$said" || { echo "no pause after the failure note"; echo "$said"; exit 1; }
+  grep -q "sudo survival-kit-media-setup" <<<"$said" || { echo "no way to finish it shown"; echo "$said"; exit 1; }
 
   echo "== Media already set up (exit 2): no failure note"
   rm -f "$CALLS" marker name
