@@ -107,8 +107,8 @@ fi
 # the owner decides
 echo
 echo "Profile:"
-echo "  lite — wiki, maps, passwords; for low RAM or a slow CPU"
-echo "  full — adds local AI; needs at least 8 GB RAM"
+echo "  lite — wiki, maps, language, passwords, files, inventory; for low RAM or a slow CPU"
+echo "  full — adds local AI and the chat; needs at least 8 GB RAM"
 while true; do
   read -rp "Profile (lite or full): " profile
   [[ $profile == lite || $profile == full ]] && break

@@ -49,6 +49,7 @@ evalChecks
   files = import ./files.nix args;
   language = import ./language.nix args;
   inventory = import ./inventory.nix args;
+  installer-prompt = import ./installer-prompt.nix args;
   desktop = import ./desktop.nix args;
   firstboot = import ./firstboot.nix args;
   lite-closure = import ./lite-closure.nix args; # local only: builds the lite system
