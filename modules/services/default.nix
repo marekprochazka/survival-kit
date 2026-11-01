@@ -13,5 +13,6 @@
     ./maps
     ./files
     ./language
+    ./inventory
   ];
 }

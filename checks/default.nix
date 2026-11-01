@@ -33,6 +33,7 @@ let
     eval-storage = import ./eval-storage.nix args;
     eval-files = import ./eval-files.nix args;
     eval-language = import ./eval-language.nix args;
+    eval-inventory = import ./eval-inventory.nix args;
     tls-script = import ./tls-script.nix args;
   };
 in
