@@ -36,8 +36,8 @@ assert lib.assertMsg (
   && svc.environment.MAP_BUILTINS_DIR == "${cfg.survivalKit.services.maps.builtinDir}"
 ) "maps section: imports dir, built-in maps, Protomaps scheme 4";
 assert lib.assertMsg (
-  reg.description == "Import and manage wiki books, maps and AI models"
-) "the tile names all three kinds";
+  reg.description == "Import and manage wiki books, maps, media and AI models"
+) "the tile names the kinds it manages";
 assert lib.assertMsg (svc.environment.OLLAMA == "1") "full: the models section is on";
 assert lib.assertMsg (
   svc.environment.HOME == "/var/lib/survival-kit/content"

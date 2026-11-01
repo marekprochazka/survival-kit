@@ -12,6 +12,15 @@
     memoryPercent = 50;
   };
 
+  # Heavy background work (Ollama answering, Jellyfin scanning) gives way to the desktop.
+  # CPU weight only splits CPU among siblings, so it gets its own top-level slice next to
+  # system.slice (100) and user.slice (100, the desktop): 100 : 100 : 20 → the desktop
+  # keeps ~83 % under load; an otherwise idle box still gives the work every core.
+  systemd.slices.background = {
+    description = "Heavy background work that gives way to the desktop";
+    sliceConfig.CPUWeight = 20;
+  };
+
   # mDNS so the box answers to <hostname>.local on any LAN:
   services.avahi = {
     enable = true;

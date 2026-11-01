@@ -1,5 +1,5 @@
 # Content manager (ADR-0004) at https://content.<domain>: import wiki books, maps, languages
-# (translation models, dictionaries) and AI models through the browser's file dialog, see disk
+# (translation models, dictionaries), media (films, series, music) and AI models through the browser's file dialog, see disk
 # use, delete. A small Python program (stdlib only, ./app) behind nginx; file-based with system
 # rights — it never logs into a service.
 {
@@ -60,6 +60,7 @@ in
         MAP_BUILTINS_DIR = lib.optionalString maps.enable "${maps.builtinDir}";
         MAP_SCHEME = "4"; # Protomaps basemap version the bundled map style draws
         LANGUAGE = if language.enable then "1" else "0";
+        MEDIA = if config.survivalKit.services.media.enable then "1" else "0";
         TRANSLATE_BUILTINS_DIR = lib.optionalString language.enable "${language.builtinDir}/translate";
         DICT_BUILTINS_DIR = lib.optionalString language.enable "${language.builtinDir}/dict";
         PYTHONUNBUFFERED = "1";
@@ -87,7 +88,7 @@ in
       subdomain = "content";
       inherit port;
       title = "Content";
-      description = "Import and manage wiki books, maps and AI models";
+      description = "Import and manage wiki books, maps, media and AI models";
       order = 40;
       healthPath = "/health";
     };

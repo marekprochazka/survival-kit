@@ -1,5 +1,6 @@
 # Profiles (ADR-0001/0002): which services a box gets, chosen once at install.
-#   lite — for low RAM / a slow CPU: wiki, maps, language, passwords, files, inventory, content
+#   lite — for low RAM / a slow CPU: wiki, maps, language, passwords, files, inventory, media,
+#          content
 #   full — lite + the heavy services (≥ 8 GB RAM, i5-class): local AI
 # Defaults only (mkDefault): a single service can still be switched on/off by hand.
 # Add a new service here. Not profile-dependent: dashboard, desktop, first boot, TLS.
@@ -27,6 +28,7 @@ in
     files.enable = lib.mkDefault true; # Files: personal cloud + Library (both profiles)
     language.enable = lib.mkDefault true; # translator, dictionary, thesaurus (both profiles)
     inventory.enable = lib.mkDefault true; # household inventory, Homebox (both profiles)
+    media.enable = lib.mkDefault true; # films, series, music — Jellyfin (both profiles)
     ollama.enable = lib.mkDefault (profile == "full");
     lookup.enable = lib.mkDefault true; # the wiki lookup + MCP (no model needed)
     chat.enable = lib.mkDefault (profile == "full"); # needs a model

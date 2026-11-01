@@ -18,14 +18,9 @@ in
       # loadModels stays empty: pulling at boot needs internet (offline box)
     };
     # Yield to the desktop: while the model thinks, Firefox and the panel still get most of
-    # the CPU. CPU weight only splits CPU among siblings, so Ollama gets its own top-level
-    # slice next to system.slice (100) and user.slice (100, the desktop): 100 : 100 : 20.
-    # Not the idle class — with nothing else running it still uses every core, so a chat
-    # answer isn't slower when you just wait for it.
-    systemd.slices.background = {
-      description = "Heavy background work that gives way to the desktop";
-      sliceConfig.CPUWeight = 20;
-    };
+    # the CPU — Ollama runs in background.slice (modules/base: weight 20 next to the
+    # desktop's 100). Not the idle class — with nothing else running it still uses every
+    # core, so a chat answer isn't slower when you just wait for it.
     systemd.services.ollama.serviceConfig = {
       Slice = "background.slice";
       Nice = 10; # within its slice

@@ -14,5 +14,6 @@
     ./files
     ./language
     ./inventory
+    ./media
   ];
 }
