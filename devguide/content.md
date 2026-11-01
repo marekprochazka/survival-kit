@@ -74,7 +74,10 @@ the page's dialogs are only for the person.
   (accents, other scripts, spaces, parentheses — they are the titles Jellyfin shows);
   `/ \ : * ? " < > |` and control characters are replaced or dropped, at most 200 bytes. A
   film's video is renamed to the item (`The Kid (1921).mkv`), subtitles keep a language tag
-  (`.cs.srt`). The page skips files of other types in a music folder.
+  (`.cs.srt`); a second untagged one becomes `.2.srt`. The page skips files of other types
+  in a music folder. A batch nobody added to for 30 min (tab closed) is dropped at the next
+  `begin`, freeing its staging space. Every path from the location's tree down to an item
+  is checked for links (`media.linked`) before importing into it or deleting it.
 - **Replacing:** an import replaces the copy of that name **in use**, wherever it is;
   duplicates on other locations are left alone. Delete removes only the copy clicked.
 

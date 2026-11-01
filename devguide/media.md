@@ -27,11 +27,16 @@ drives). After every import, delete or drive change the content manager rebuilds
 library, and `library.py` then calls `POST /Library/Refresh` with **the box's key**
 (`/var/lib/survival-kit/media/api-key`, root-only, env `MEDIA_KEY_FILE`). No key (the owner
 set Jellyfin up by hand) → no call; Jellyfin's scheduled scan or *Scan All Libraries* picks
-the change up. Jellyfin has no limited keys: this one could do anything an admin can, which
+the change up. At boot the library runs before Jellyfin answers, so
+**`survival-kit-media-rescan.service`** (wanted by and after `jellyfin.service`, root only
+to read the key) runs `library.py notify-media` after every Jellyfin start: it retries
+until Jellyfin takes the request (up to 10 min) — `/health` already says *Healthy* while
+everything else still answers 503 during startup. Jellyfin has no limited keys: this one could do anything an admin can, which
 is why only root can read it and only the library uses it.
 
 **Titles offline:** with no internet metadata, Jellyfin names a film after its **video
-file** (`The Kid (1921).mkv` → "The Kid (1921)"), a series after its folder, music after the
+file** (`The Kid (1921).mkv` → "The Kid (1921)"; when the file name differs from the
+folder's it uses the file name, VM-tested), a series after its folder, music after the
 tags in the files. Imports name the video after the title the person typed.
 
 ## The one-time setup
@@ -39,8 +44,13 @@ tags in the files. Imports name the video after the title the person typed.
 First boot (see [First boot](firstboot.html)) pipes the owner's name and password into
 `survival-kit-media-setup` (stdin only). `setup.py`:
 
-1. waits until Jellyfin answers (`GET /System/Info/Public`, up to 180 s, a dot every 10 s);
-   if `StartupWizardCompleted` is already true it changes nothing (**exit 2**);
+1. waits (up to 5 min each, a first start on an old laptop is slow) for the index folders
+   `movies/ shows/ music/` and for Jellyfin to answer (`GET /System/Info/Public`, a dot
+   every 10 s); from then on one **overall limit** of 5 min bounds every call. If
+   `StartupWizardCompleted` is true **and** the key file exists it changes nothing
+   (**exit 2**); wizard done but no key = a setup that stopped half-way: it **resumes** —
+   skips the wizard, signs in with the given name and password (another password → a clear
+   error) and does only what is missing (libraries that don't exist yet, then the rest);
 2. the wizard: `POST /Startup/Configuration` (English, server name `survival-kit`),
    `GET` + `POST /Startup/User` (the name — cleaned to what Jellyfin accepts: letters of any
    script, digits, space and `- ' . _ @ +`; the console says when it changed — and the
@@ -54,7 +64,10 @@ First boot (see [First boot](firstboot.html)) pipes the owner's name and passwor
 4. the owner's policy: **video transcoding off**, sound transcoding and remuxing on;
 5. server: plugin repositories emptied; network: auto-discovery and UPnP off;
 6. `POST /Auth/Keys?app=survival-kit`, reads the key back, writes it root-only (temp file
-   → rename), asks for a first rescan. **Exit 0**; any failure → one line, **exit 1**.
+   → rename), asks for a first rescan. **Exit 0**, or **3** when the name had to be
+   shortened (the note is printed; first boot then waits for Enter); any failure → one
+   line, **exit 1** (first boot says to run `sudo survival-kit-media-setup`, which asks for
+   the name and password when run in a terminal).
 
 **Set once (user's decision):** nothing re-applies these settings. The owner is a Jellyfin
 admin and may change anything (even turn internet metadata on); a restart keeps it
@@ -63,7 +76,9 @@ may transcode video unless the box's manual step (untick it) is followed.
 
 **Before setup** Jellyfin has its own password-less admin (named after the service user):
 whoever reaches the setup wizard owns Jellyfin. It listens on 127.0.0.1 only and first boot
-finishes the wizard, so the window is short and local.
+finishes the wizard, so normally the window is short and local — but if first boot's setup
+failed *before* the wizard, it stays open until the owner finishes it. **Hub mode must
+account for this** (e.g. not open Media to the network before setup is complete).
 
 ## Service settings
 

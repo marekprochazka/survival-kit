@@ -8,6 +8,9 @@ has their own account, so *Continue watching* and *already seen* are their own.
 
 Sign in with the **name and password you chose at the very first start** of the box (the
 same as for `sudo`). That account is the box's media **admin**: it can add the others.
+Media allows fewer characters in names (letters, digits, spaces and `- ' . _ @ +`); if your
+name had others, the first start showed the shortened name Media uses — e.g. *Zoë O'Brien!*
+becomes *Zoë O'Brien*.
 
 If you change the box's password later, Media keeps the old one — change it in Media too
 (your picture at the top right → *Profile* → *Password*).
@@ -62,12 +65,14 @@ Other files beside them (posters, `.nfo` files, a `Sample` folder) are left alon
 **video file** like the title — that is what Media shows. If the same film, season or album
 is on two places, the **newer** copy is used; the other is shown as a duplicate and
 *Auto-resolve* moves it aside (nothing is deleted). Pull the drive out and its media
-disappears from Media until it is back.
+disappears from Media until it is back; changes made while the box was off show up a minute
+or two after it starts. Folders on the drive that are *links* (shortcuts) are ignored.
 
 ## What plays
 
 Firefox plays video in **H.264**, **VP9** or **AV1** and sound in **AAC**, **MP3**, **FLAC**,
-**Opus** or **Vorbis** — most `.mp4`, `.mkv` and `.webm` files. Sound it can't play
+**Opus** or **Vorbis** — most `.mp4`, `.mkv` and `.webm` files. A second subtitle file
+without a language in its name is kept as *…2.srt*. Sound it can't play
 (**AC3**, **DTS** — common in films) is converted while you watch; that is light work.
 **Video is never converted**: that would make an old laptop crawl. A film whose video
 Firefox can't play (e.g. **HEVC / H.265**) shows an error instead. `.avi` and `.mov` files
@@ -86,10 +91,20 @@ from this box. The admin may change any of it in the *Dashboard* — the box nev
 back. Turning internet features on only helps when the box is online; turning video
 conversion on can make the computer slow while someone watches.
 
-## If Media asks for setup
+## If Media isn't set up
 
-If something went wrong at the first start, opening Media shows Jellyfin's own setup. Fill
-it in (use your box name and password), and add three libraries: **Movies** (*Movies*,
+If the first start said *Media couldn't be set up now* (Media can take minutes to start
+the first time on an older computer), finish it in a terminal:
+
+    sudo survival-kit-media-setup
+
+It asks for your box name and password and completes what is missing — the libraries,
+the starting settings and the box's own rescan key. It changes nothing on a box where
+Media is fully set up.
+
+If instead opening Media shows Jellyfin's own setup pages, you can also fill them in (use
+your box name and password), add three libraries **Movies** (*Movies*,
 folder `/var/lib/survival-kit/library/media/movies`), **Shows** (*Shows*, `…/media/shows`)
-and **Music** (*Music*, `…/media/music`). New imports then show up after Jellyfin's
-scheduled scan, or straight away with *Dashboard → Libraries → Scan All Libraries*.
+and **Music** (*Music*, `…/media/music`), and then run `sudo survival-kit-media-setup` with
+the same name and password so new imports show up by themselves. Until Media is set up,
+its setup pages are open to anyone on this box — finish it soon.
