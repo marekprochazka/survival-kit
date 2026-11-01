@@ -33,4 +33,15 @@ assert lib.assertMsg (
 ) "ISO needs no ZFS support (smaller image, no forceImportRoot warning)";
 assert lib.assertMsg (lib.hasInfix "trap ':' INT" iso.programs.bash.loginShellInit)
   "Ctrl+C in the auto-started installer must not abort the login shell's setup";
+assert lib.assertMsg (
+  iso.isoImage.squashfsCompression == "zstd -Xcompression-level 19"
+) "the release ISO keeps maximum compression";
+assert lib.assertMsg (
+  let
+    fast = self.nixosConfigurations.installer-fast.config;
+  in
+  fast.isoImage.squashfsCompression != iso.isoImage.squashfsCompression
+  && lib.hasSuffix "-fast" fast.image.baseName
+  && fast.system.build.toplevel == iso.system.build.toplevel
+) "the fast test ISO: same system, lighter compression, name ends in -fast";
 pkgs.runCommand "eval-iso" { } "touch $out"

@@ -40,6 +40,10 @@
             ./hosts/installer
           ];
         };
+        # the same installer, lightly compressed, for quick VirtualBox tests (see packages.iso-fast)
+        installer-fast = self.nixosConfigurations.installer.extendModules {
+          modules = [ ./hosts/installer/fast.nix ];
+        };
       };
 
       # `nix fmt` → format the whole repo with the pinned nixfmt
@@ -55,6 +59,8 @@
         };
         # the installer ISO (big: ~3 GB) — build with utils/build-iso
         iso = self.nixosConfigurations.installer.config.system.build.isoImage;
+        # quick test build of the same ISO — utils/build-iso --fast
+        iso-fast = self.nixosConfigurations.installer-fast.config.system.build.isoImage;
       };
 
       # tests (ADR-0003); `nix flake check` runs all, CI builds lint + eval

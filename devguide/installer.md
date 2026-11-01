@@ -58,4 +58,12 @@ closes `cryptroot`, so it can simply be re-run.
 `nixosConfigurations.installer` = nixpkgs' minimal installation CD + `hosts/installer`:
 BIOS/UEFI/USB bootable, volume `SURVIVAL_KIT`, file `survival-kit-<date>-<rev>.iso`. On
 tty1 the live user's login shell starts `sudo survival-kit-install` once per boot; other
-consoles are plain shells. Build: `nix build .#iso` (~3 GB, several minutes).
+consoles are plain shells. Build: `utils/build-iso` (= `nix build .#iso`; ~3.5 GB, about
+10 minutes, mostly squashfs compression at `zstd -Xcompression-level 19`).
+
+**Quick test build:** `utils/build-iso --fast` (= `.#iso-fast`, into `system/build/iso-fast/`)
+is the same system with light compression (`hosts/installer/fast.nix` on top of the
+installer via `extendModules`; the file name ends in `-fast`). It builds much faster and the
+file is bigger, which is fine for VirtualBox tests. Never hand out a `-fast` ISO: the
+release build is plain `build-iso`. (`eval-iso` checks both: same system, different
+compression.)
